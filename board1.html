@@ -36,27 +36,26 @@
   </div>
   <canvas id="canvas" width="800" height="500"></canvas>
 
-  <!-- Firebase SDK（兼容版，方便上手） -->
+  <!-- Firebase SDK（兼容版） -->
   <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-database-compat.js"></script>
 
   <script>
-    // ====== 1. 填入你的 firebaseConfig（用你在控制台里那一段替换下面这一段） ======
+    // ====== 已替换为你的 firebaseConfig ======
     const firebaseConfig = {
-      apiKey: "YOUR_API_KEY",
-      authDomain: "YOUR_PROJECT_ID.firebaseapp.com",
-      databaseURL: "https://YOUR_PROJECT_ID-default-rtdb.firebaseio.com",
-      projectId: "YOUR_PROJECT_ID",
-      storageBucket: "YOUR_PROJECT_ID.appspot.com",
-      messagingSenderId: "XXXXXXX",
-      appId: "1:XXXXXXX:web:XXXXXXX"
+      apiKey: "AIzaSyCaRNjmy6kV0IK1zr8LRPRN-oEhrrFxrzk",
+      authDomain: "shadow-draw-94af9.firebaseapp.com",
+      projectId: "shadow-draw-94af9",
+      storageBucket: "shadow-draw-94af9.firebasestorage.app",
+      messagingSenderId: "1000953704742",
+      appId: "1:1000953704742:web:535a3d8291f84a645611e7"
     };
-    // ====== 2. 初始化 Firebase ======
+
     firebase.initializeApp(firebaseConfig);
     const db = firebase.database();
-    const BOARD_ID = "board1"; // 这个页面的编号
+    const BOARD_ID = "board1";
 
-    // ====== 3. 画板逻辑 ======
+    // ====== 画板逻辑 ======
     const canvas = document.getElementById("canvas");
     const ctx = canvas.getContext("2d");
     let drawing = false;
@@ -82,34 +81,34 @@
 
     function endDraw() {
       drawing = false;
-      uploadCanvas(); // 每次松手就上传一次
+      uploadCanvas();
     }
 
-    // 鼠标事件
+    // 鼠标
     canvas.addEventListener("mousedown", e => {
-      const rect = canvas.getBoundingClientRect();
-      startDraw(e.clientX - rect.left, e.clientY - rect.top);
+      const r = canvas.getBoundingClientRect();
+      startDraw(e.clientX - r.left, e.clientY - r.top);
     });
     canvas.addEventListener("mousemove", e => {
-      const rect = canvas.getBoundingClientRect();
-      drawLine(e.clientX - rect.left, e.clientY - rect.top);
+      const r = canvas.getBoundingClientClientRect?.() ?? canvas.getBoundingClientRect();
+      drawLine(e.clientX - r.left, e.clientY - r.top);
     });
     canvas.addEventListener("mouseup", endDraw);
     canvas.addEventListener("mouseleave", endDraw);
 
-    // 触摸事件（手机 / iPad）
+    // 触摸（手机/iPad）
     canvas.addEventListener("touchstart", e => {
       e.preventDefault();
-      const rect = canvas.getBoundingClientRect();
+      const r = canvas.getBoundingClientRect();
       const t = e.touches[0];
-      startDraw(t.clientX - rect.left, t.clientY - rect.top);
+      startDraw(t.clientX - r.left, t.clientY - r.top);
     }, { passive: false });
 
     canvas.addEventListener("touchmove", e => {
       e.preventDefault();
-      const rect = canvas.getBoundingClientRect();
+      const r = canvas.getBoundingClientRect();
       const t = e.touches[0];
-      drawLine(t.clientX - rect.left, t.clientY - rect.top);
+      drawLine(t.clientX - r.left, t.clientY - r.top);
     }, { passive: false });
 
     canvas.addEventListener("touchend", e => {
@@ -122,7 +121,7 @@
       uploadCanvas();
     });
 
-    // ====== 4. 上传当前画布到 Firebase ======
+    // ====== 上传画布到 Firebase ======
     function uploadCanvas() {
       const dataURL = canvas.toDataURL("image/png");
       db.ref("boards/" + BOARD_ID).set({
@@ -133,4 +132,3 @@
   </script>
 </body>
 </html>
-add board1
