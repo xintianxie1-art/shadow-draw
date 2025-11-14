@@ -1,189 +1,109 @@
-<!DOCTYPE html>
-<html lang="zh-CN">
-<head>
-  <meta charset="UTF-8">
-  <title>Shadow Draw – 皮影自动生成展示</title>
-  <style>
-    body {
-      margin: 0;
-      padding: 24px;
-      background: #f6e3c2; /* 米黄色幕布 */
-      color: #4a3420;
-      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-      text-align: center;
+function renderShadowPuppet(dataURL, canvasId) {
+  const canvas = document.getElementById(canvasId);
+  const ctx = canvas.getContext("2d");
+  const img = new Image();
+
+  img.onload = function () {
+    const cw = canvas.width;
+    const ch = canvas.height;
+
+    // 1. 米黄色幕布背景 + 轻微竖向渐变
+    const bg = ctx.createLinearGradient(0, 0, 0, ch);
+    bg.addColorStop(0, "#fdf6e6");
+    bg.addColorStop(1, "#f3e0c0");
+    ctx.fillStyle = bg;
+    ctx.fillRect(0, 0, cw, ch);
+
+    // 2. 把原图画到一个离屏画布上，便于处理
+    const off = document.createElement("canvas");
+    off.width = cw;
+    off.height = ch;
+    const offCtx = off.getContext("2d");
+
+    const scale = Math.min(cw / img.width, ch / img.height);
+    const dw = img.width * scale;
+    const dh = img.height * scale;
+    const dx = (cw - dw) / 2;
+    const dy = (ch - dh) / 2;
+
+    offCtx.clearRect(0, 0, cw, ch);
+    offCtx.drawImage(img, dx, dy, dw, dh);
+
+    // 3. 把线稿提取成深棕色轮廓，背景弄成透明
+    let imageData = offCtx.getImageData(0, 0, cw, ch);
+    let d = imageData.data;
+
+    for (let i = 0; i < d.length; i += 4) {
+      const r = d[i];
+      const g = d[i + 1];
+      const b = d[i + 2];
+      const a = d[i + 3];
+
+      if (a < 10) {
+        d[i + 3] = 0; // 完全透明，直接忽略
+        continue;
+      }
+
+      const gray = 0.299 * r + 0.587 * g + 0.114 * b;
+
+      if (gray < 230) {
+        // 判定为线条区域：改成深棕色轮廓
+        d[i] = 60;
+        d[i + 1] = 30;
+        d[i + 2] = 20;
+        d[i + 3] = 255;
+      } else {
+        // 非线条：透明
+        d[i + 3] = 0;
+      }
     }
-    h1 {
-      margin-bottom: 6px;
-      font-size: 28px;
-      letter-spacing: 1px;
-    }
-    p {
-      margin-top: 0;
-      margin-bottom: 22px;
-      color: #7a6144;
-      font-size: 14px;
-    }
-    .grid {
-      display: flex;
-      flex-wrap: wrap;
-      justify-content: center;
-      gap: 24px;
-    }
-    .item {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-    }
-    .item h2 {
-      margin: 4px 0 10px;
-      font-size: 18px;
-    }
-    canvas {
-      width: 380px;
-      height: 260px;
-      border: 3px solid #c49b63;
-      background: #fdf6e6; /* 稍微浅一点的纸色 */
-      box-shadow: 0 6px 18px rgba(0,0,0,0.15);
-    }
-  </style>
-</head>
-<body>
-  <h1>Shadow Draw – 皮影自动生成展示</h1>
-  <p>观众在四个白色画板上绘制图案，这里自动生成带皮影质感的效果图。</p>
+    offCtx.putImageData(imageData, 0, 0);
 
-  <div class="grid">
-    <div class="item">
-      <h2>Board 1</h2>
-      <canvas id="c1" width="760" height="520"></canvas>
-    </div>
-    <div class="item">
-      <h2>Board 2</h2>
-      <canvas id="c2" width="760" height="520"></canvas>
-    </div>
-    <div class="item">
-      <h2>Board 3</h2>
-      <canvas id="c3" width="760" height="520"></canvas>
-    </div>
-    <div class="item">
-      <h2>Board 4</h2>
-      <canvas id="c4" width="760" height="520"></canvas>
-    </div>
-  </div>
+    // 4. 先画一层模糊的彩色影子（染色皮革感）
+    ctx.save();
+    ctx.filter = "blur(6px)";
+    ctx.globalAlpha = 0.85;
+    ctx.globalCompositeOperation = "multiply";
+    ctx.drawImage(off, 0, 0);
+    ctx.restore();
 
-  <!-- Firebase SDK -->
-  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-database-compat.js"></script>
+    // 5. 再叠加一层清晰轮廓
+    ctx.save();
+    ctx.globalAlpha = 1;
+    ctx.globalCompositeOperation = "source-over";
+    ctx.drawImage(off, 0, 0);
+    ctx.restore();
 
-  <script>
-    // 和 board1–4 一样的配置
-    const firebaseConfig = {
-      apiKey: "AIzaSyCaRNjmy6kV0IK1zr8LRPRN-oEhrrFxrzk",
-      authDomain: "shadow-draw-94af9.firebaseapp.com",
-      projectId: "shadow-draw-94af9",
-      storageBucket: "shadow-draw-94af9.firebasestorage.app",
-      messagingSenderId: "1000953704742",
-      appId: "1:1000953704742:web:535a3d8291f84a645611e7"
-    };
+    // 6. 在有内容的地方“打孔”做镂空
+    const holeStep = 18; // 孔间距
+    const radius = 2;    // 孔半径
 
-    if (!firebase.apps || !firebase.apps.length) {
-      firebase.initializeApp(firebaseConfig);
-    }
-    const db = firebase.database();
-
-    // 把原始图像做成“皮影风格”的滤镜
-    function renderShadowPuppet(dataURL, canvasId) {
-      const canvas = document.getElementById(canvasId);
-      const ctx = canvas.getContext("2d");
-      const img = new Image();
-      img.onload = function () {
-        const cw = canvas.width;
-        const ch = canvas.height;
-
-        // 幕布底色
-        ctx.fillStyle = "#fdf6e6";
-        ctx.fillRect(0, 0, cw, ch);
-
-        // 按比例缩放原图
-        const scale = Math.min(cw / img.width, ch / img.height);
-        const dw = img.width * scale;
-        const dh = img.height * scale;
-        const dx = (cw - dw) / 2;
-        const dy = (ch - dh) / 2;
-
-        ctx.drawImage(img, dx, dy, dw, dh);
-
-        let imageData = ctx.getImageData(0, 0, cw, ch);
-        let d = imageData.data;
-
-        // 先做一遍“线条加深 + 区域着色”
-        for (let i = 0; i < d.length; i += 4) {
-          const r = d[i];
-          const g = d[i + 1];
-          const b = d[i + 2];
-          const a = d[i + 3];
-          if (a < 10) continue;
-
-          const gray = 0.299 * r + 0.587 * g + 0.114 * b;
-
-          // 接近白的区域：当背景纸
-          if (gray > 245) {
-            d[i] = 253;
-            d[i + 1] = 246;
-            d[i + 2] = 230;
-            d[i + 3] = 255;
-          }
-          // 中间亮度：染成暖红/橙色块（像彩色皮影）
-          else if (gray > 160) {
-            d[i] = 220;
-            d[i + 1] = 110;
-            d[i + 2] = 70;
-            d[i + 3] = 255;
-          }
-          // 比较暗：当作轮廓线，压到接近黑色
-          else {
-            d[i] = 25;
-            d[i + 1] = 15;
-            d[i + 2] = 10;
-            d[i + 3] = 255;
-          }
+    ctx.save();
+    ctx.globalCompositeOperation = "destination-out";
+    ctx.fillStyle = "rgba(0,0,0,1)";
+    for (let y = radius; y < ch; y += holeStep) {
+      for (let x = radius; x < cw; x += holeStep) {
+        const pixel = ctx.getImageData(x, y, 1, 1).data;
+        if (pixel[3] > 20) { // 只在有内容的地方打孔
+          ctx.beginPath();
+          ctx.arc(x, y, radius, 0, Math.PI * 2);
+          ctx.fill();
         }
-
-        // 简单“镂空”——在彩色区域打洞
-        const holeGap = 18;
-        for (let y = 0; y < ch; y += holeGap) {
-          for (let x = 0; x < cw; x += holeGap) {
-            const idx = (y * cw + x) * 4;
-            const r2 = d[idx];
-            const g2 = d[idx + 1];
-            const b2 = d[idx + 2];
-
-            // 避开纯纸背景，只在彩色/线条区域挖小孔
-            const isPaper =
-              r2 > 245 && g2 > 235 && b2 > 220;
-            if (!isPaper) {
-              d[idx + 3] = 0; // 设置为透明
-            }
-          }
-        }
-
-        ctx.putImageData(imageData, 0, 0);
-      };
-      img.src = dataURL;
+      }
     }
+    ctx.restore();
 
-    function bindBoard(boardId, canvasId) {
-      db.ref("boards/" + boardId).on("value", snapshot => {
-        const val = snapshot.val();
-        if (val && val.image) {
-          renderShadowPuppet(val.image, canvasId);
-        }
-      });
-    }
+    // 7. 加一点暗角，让中间更亮，像灯后面的幕布
+    const vignette = ctx.createRadialGradient(
+      cw / 2, ch / 2, Math.min(cw, ch) / 3,
+      cw / 2, ch / 2, Math.max(cw, ch) / 1.1
+    );
+    vignette.addColorStop(0, "rgba(0,0,0,0)");
+    vignette.addColorStop(1, "rgba(0,0,0,0.28)");
+    ctx.fillStyle = vignette;
+    ctx.fillRect(0, 0, cw, ch);
+  };
 
-    bindBoard("board1", "c1");
-    bindBoard("board2", "c2");
-    bindBoard("board3", "c3");
-    bindBoard("board4", "c4");
-  </script>
-</body>
-</html>
+  img.src = dataURL;
+}
+
