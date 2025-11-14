@@ -2,7 +2,7 @@
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8">
-  <title>Shadow Draw Live Gallery</title>
+  <title>Shadow Draw – 皮影生成展示</title>
   <style>
     body {
       margin: 0;
@@ -13,7 +13,13 @@
       text-align: center;
     }
     h1 {
-      margin-bottom: 10px;
+      margin-bottom: 8px;
+    }
+    p {
+      margin-top: 0;
+      margin-bottom: 20px;
+      color: #aaa;
+      font-size: 14px;
     }
     .grid {
       display: flex;
@@ -21,22 +27,44 @@
       justify-content: center;
       gap: 20px;
     }
-    .item img {
+    .item {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+    .item h2 {
+      margin: 4px 0 8px;
+      font-size: 16px;
+    }
+    canvas {
       width: 380px;
+      height: 260px;
       border: 2px solid #444;
       background: #222;
     }
   </style>
 </head>
 <body>
-  <h1>Live Gallery</h1>
-  <p>四个画板实时同步更新。</p>
+  <h1>Shadow Draw – 皮影自动生成展示</h1>
+  <p>观众在各画板绘制的图像将自动转换为“皮影风格”并在此实时展示。</p>
 
   <div class="grid">
-    <div class="item"><h2>Board 1</h2><img id="img1"></div>
-    <div class="item"><h2>Board 2</h2><img id="img2"></div>
-    <div class="item"><h2>Board 3</h2><img id="img3"></div>
-    <div class="item"><h2>Board 4</h2><img id="img4"></div>
+    <div class="item">
+      <h2>Board 1</h2>
+      <canvas id="c1" width="760" height="520"></canvas>
+    </div>
+    <div class="item">
+      <h2>Board 2</h2>
+      <canvas id="c2" width="760" height="520"></canvas>
+    </div>
+    <div class="item">
+      <h2>Board 3</h2>
+      <canvas id="c3" width="760" height="520"></canvas>
+    </div>
+    <div class="item">
+      <h2>Board 4</h2>
+      <canvas id="c4" width="760" height="520"></canvas>
+    </div>
   </div>
 
   <!-- Firebase SDK -->
@@ -44,7 +72,7 @@
   <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-database-compat.js"></script>
 
   <script>
-    // ====== 已替换为你的 firebaseConfig ======
+    // 用你的 firebaseConfig（和 board1/2/3/4 完全一致）
     const firebaseConfig = {
       apiKey: "AIzaSyCaRNjmy6kV0IK1zr8LRPRN-oEhrrFxrzk",
       authDomain: "shadow-draw-94af9.firebaseapp.com",
@@ -54,23 +82,106 @@
       appId: "1:1000953704742:web:535a3d8291f84a645611e7"
     };
 
-    firebase.initializeApp(firebaseConfig);
+    if (!firebase.apps || !firebase.apps.length) {
+      firebase.initializeApp(firebaseConfig);
+    }
     const db = firebase.database();
 
-    function bindBoard(id, img) {
-      db.ref("boards/" + id).on("value", s => {
-        const data = s.val();
-        if (data && data.image) {
-          document.getElementById(img).src = data.image;
+    // 把普通画布图像转换成“皮影风格”的简单滤镜
+    function renderShadowPuppet(dataURL, canvasId) {
+      const canvas = document.getElementById(canvasId);
+      const ctx = canvas.getContext("2d");
+
+      const img = new Image();
+      img.onload = function () {
+        // 先按比例缩放到画布大小居中
+        const cw = canvas.width;
+        const ch = canvas.height;
+        ctx.fillStyle = "#222";
+        ctx.fillRect(0, 0, cw, ch);
+
+        // 计算缩放比例（等比缩放）
+        const scale = Math.min(cw / img.width, ch / img.height);
+        const dw = img.width * scale;
+        const dh = img.height * scale;
+        const dx = (cw - dw) / 2;
+        const dy = (ch - dh) / 2;
+
+        ctx.drawImage(img, dx, dy, dw, dh);
+
+        // 取图像数据做“皮影化”处理
+        const imageData = ctx.getImageData(0, 0, cw, ch);
+        const d = imageData.data;
+
+        for (let i = 0; i < d.length; i += 4) {
+          const r = d[i];
+          const g = d[i + 1];
+          const b = d[i + 2];
+          const a = d[i + 3];
+
+          // 只处理不透明的像素
+          if (a < 10) continue;
+
+          // 灰度
+          const gray = 0.299 * r + 0.587 * g + 0.114 * b;
+
+          // 背景：偏米色，模拟皮影皮革底色
+          if (gray > 240) {
+            d[i] = 255;
+            d[i + 1] = 245;
+            d[i + 2] = 210;
+            d[i + 3] = 255;
+          }
+          // 中间亮度：染成红色/橙色区域，像彩色皮影
+          else if (gray > 150) {
+            d[i] = 210;
+            d[i + 1] = 80;
+            d[i + 2] = 60;
+            d[i + 3] = 255;
+          }
+          // 暗部：作为轮廓线，变成接近黑色
+          else {
+            d[i] = 20;
+            d[i + 1] = 20;
+            d[i + 2] = 20;
+            d[i + 3] = 255;
+          }
+        }
+
+        // 简单“镂空”效果：每隔一定像素挖掉一点点
+        const holeGap = 16;
+        for (let y = 0; y < ch; y += holeGap) {
+          for (let x = 0; x < cw; x += holeGap) {
+            const idx = (y * cw + x) * 4;
+            // 只在非背景区域打孔
+            const r2 = d[idx];
+            const g2 = d[idx + 1];
+            const b2 = d[idx + 2];
+            if (!(r2 > 250 && g2 > 240 && b2 > 200)) {
+              d[idx + 3] = 0; // 透明
+            }
+          }
+        }
+
+        ctx.putImageData(imageData, 0, 0);
+      };
+      img.src = dataURL;
+    }
+
+    function bindBoard(boardId, canvasId) {
+      db.ref("boards/" + boardId).on("value", snapshot => {
+        const val = snapshot.val();
+        if (val && val.image) {
+          renderShadowPuppet(val.image, canvasId);
         }
       });
     }
 
-    bindBoard("board1", "img1");
-    bindBoard("board2", "img2");
-    bindBoard("board3", "img3");
-    bindBoard("board4", "img4");
+    bindBoard("board1", "c1");
+    bindBoard("board2", "c2");
+    bindBoard("board3", "c3");
+    bindBoard("board4", "c4");
   </script>
-
 </body>
 </html>
+
