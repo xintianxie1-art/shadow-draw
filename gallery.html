@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <title>Shadow Draw Live Gallery</title>
+  <style>
+    body {
+      margin: 0;
+      padding: 20px;
+      background: #111;
+      color: #eee;
+      font-family: system-ui, sans-serif;
+      text-align: center;
+    }
+    h1 {
+      margin-bottom: 10px;
+    }
+    .grid {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 20px;
+    }
+    .item img {
+      width: 380px;
+      border: 2px solid #444;
+      background: #222;
+    }
+  </style>
+</head>
+<body>
+  <h1>Live Gallery</h1>
+  <p>四个画板实时同步更新。</p>
+
+  <div class="grid">
+    <div class="item"><h2>Board 1</h2><img id="img1"></div>
+    <div class="item"><h2>Board 2</h2><img id="img2"></div>
+    <div class="item"><h2>Board 3</h2><img id="img3"></div>
+    <div class="item"><h2>Board 4</h2><img id="img4"></div>
+  </div>
+
+  <!-- Firebase SDK -->
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-database-compat.js"></script>
+
+  <script>
+    // ====== 已替换为你的 firebaseConfig ======
+    const firebaseConfig = {
+      apiKey: "AIzaSyCaRNjmy6kV0IK1zr8LRPRN-oEhrrFxrzk",
+      authDomain: "shadow-draw-94af9.firebaseapp.com",
+      projectId: "shadow-draw-94af9",
+      storageBucket: "shadow-draw-94af9.firebasestorage.app",
+      messagingSenderId: "1000953704742",
+      appId: "1:1000953704742:web:535a3d8291f84a645611e7"
+    };
+
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.database();
+
+    function bindBoard(id, img) {
+      db.ref("boards/" + id).on("value", s => {
+        const data = s.val();
+        if (data && data.image) {
+          document.getElementById(img).src = data.image;
+        }
+      });
+    }
+
+    bindBoard("board1", "img1");
+    bindBoard("board2", "img2");
+    bindBoard("board3", "img3");
+    bindBoard("board4", "img4");
+  </script>
+
+</body>
+</html>
