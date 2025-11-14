@@ -2,30 +2,32 @@
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8">
-  <title>Shadow Draw – 皮影生成展示</title>
+  <title>Shadow Draw – 皮影自动生成展示</title>
   <style>
     body {
       margin: 0;
-      padding: 20px;
-      background: #111;
-      color: #eee;
-      font-family: system-ui, sans-serif;
+      padding: 24px;
+      background: #f6e3c2; /* 米黄色幕布 */
+      color: #4a3420;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
       text-align: center;
     }
     h1 {
-      margin-bottom: 8px;
+      margin-bottom: 6px;
+      font-size: 28px;
+      letter-spacing: 1px;
     }
     p {
       margin-top: 0;
-      margin-bottom: 20px;
-      color: #aaa;
+      margin-bottom: 22px;
+      color: #7a6144;
       font-size: 14px;
     }
     .grid {
       display: flex;
       flex-wrap: wrap;
       justify-content: center;
-      gap: 20px;
+      gap: 24px;
     }
     .item {
       display: flex;
@@ -33,20 +35,21 @@
       align-items: center;
     }
     .item h2 {
-      margin: 4px 0 8px;
-      font-size: 16px;
+      margin: 4px 0 10px;
+      font-size: 18px;
     }
     canvas {
       width: 380px;
       height: 260px;
-      border: 2px solid #444;
-      background: #222;
+      border: 3px solid #c49b63;
+      background: #fdf6e6; /* 稍微浅一点的纸色 */
+      box-shadow: 0 6px 18px rgba(0,0,0,0.15);
     }
   </style>
 </head>
 <body>
   <h1>Shadow Draw – 皮影自动生成展示</h1>
-  <p>观众在各画板绘制的图像将自动转换为“皮影风格”并在此实时展示。</p>
+  <p>观众在四个白色画板上绘制图案，这里自动生成带皮影质感的效果图。</p>
 
   <div class="grid">
     <div class="item">
@@ -72,7 +75,7 @@
   <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-database-compat.js"></script>
 
   <script>
-    // 用你的 firebaseConfig（和 board1/2/3/4 完全一致）
+    // 和 board1–4 一样的配置
     const firebaseConfig = {
       apiKey: "AIzaSyCaRNjmy6kV0IK1zr8LRPRN-oEhrrFxrzk",
       authDomain: "shadow-draw-94af9.firebaseapp.com",
@@ -87,20 +90,20 @@
     }
     const db = firebase.database();
 
-    // 把普通画布图像转换成“皮影风格”的简单滤镜
+    // 把原始图像做成“皮影风格”的滤镜
     function renderShadowPuppet(dataURL, canvasId) {
       const canvas = document.getElementById(canvasId);
       const ctx = canvas.getContext("2d");
-
       const img = new Image();
       img.onload = function () {
-        // 先按比例缩放到画布大小居中
         const cw = canvas.width;
         const ch = canvas.height;
-        ctx.fillStyle = "#222";
+
+        // 幕布底色
+        ctx.fillStyle = "#fdf6e6";
         ctx.fillRect(0, 0, cw, ch);
 
-        // 计算缩放比例（等比缩放）
+        // 按比例缩放原图
         const scale = Math.min(cw / img.width, ch / img.height);
         const dw = img.width * scale;
         const dh = img.height * scale;
@@ -109,56 +112,56 @@
 
         ctx.drawImage(img, dx, dy, dw, dh);
 
-        // 取图像数据做“皮影化”处理
-        const imageData = ctx.getImageData(0, 0, cw, ch);
-        const d = imageData.data;
+        let imageData = ctx.getImageData(0, 0, cw, ch);
+        let d = imageData.data;
 
+        // 先做一遍“线条加深 + 区域着色”
         for (let i = 0; i < d.length; i += 4) {
           const r = d[i];
           const g = d[i + 1];
           const b = d[i + 2];
           const a = d[i + 3];
-
-          // 只处理不透明的像素
           if (a < 10) continue;
 
-          // 灰度
           const gray = 0.299 * r + 0.587 * g + 0.114 * b;
 
-          // 背景：偏米色，模拟皮影皮革底色
-          if (gray > 240) {
-            d[i] = 255;
-            d[i + 1] = 245;
-            d[i + 2] = 210;
+          // 接近白的区域：当背景纸
+          if (gray > 245) {
+            d[i] = 253;
+            d[i + 1] = 246;
+            d[i + 2] = 230;
             d[i + 3] = 255;
           }
-          // 中间亮度：染成红色/橙色区域，像彩色皮影
-          else if (gray > 150) {
-            d[i] = 210;
-            d[i + 1] = 80;
-            d[i + 2] = 60;
+          // 中间亮度：染成暖红/橙色块（像彩色皮影）
+          else if (gray > 160) {
+            d[i] = 220;
+            d[i + 1] = 110;
+            d[i + 2] = 70;
             d[i + 3] = 255;
           }
-          // 暗部：作为轮廓线，变成接近黑色
+          // 比较暗：当作轮廓线，压到接近黑色
           else {
-            d[i] = 20;
-            d[i + 1] = 20;
-            d[i + 2] = 20;
+            d[i] = 25;
+            d[i + 1] = 15;
+            d[i + 2] = 10;
             d[i + 3] = 255;
           }
         }
 
-        // 简单“镂空”效果：每隔一定像素挖掉一点点
-        const holeGap = 16;
+        // 简单“镂空”——在彩色区域打洞
+        const holeGap = 18;
         for (let y = 0; y < ch; y += holeGap) {
           for (let x = 0; x < cw; x += holeGap) {
             const idx = (y * cw + x) * 4;
-            // 只在非背景区域打孔
             const r2 = d[idx];
             const g2 = d[idx + 1];
             const b2 = d[idx + 2];
-            if (!(r2 > 250 && g2 > 240 && b2 > 200)) {
-              d[idx + 3] = 0; // 透明
+
+            // 避开纯纸背景，只在彩色/线条区域挖小孔
+            const isPaper =
+              r2 > 245 && g2 > 235 && b2 > 220;
+            if (!isPaper) {
+              d[idx + 3] = 0; // 设置为透明
             }
           }
         }
@@ -184,4 +187,3 @@
   </script>
 </body>
 </html>
-
