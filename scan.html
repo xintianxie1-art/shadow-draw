@@ -76,7 +76,7 @@
     canvas {
       display: block;
       margin: 0 auto;
-      background: #fdf6e6;
+      background: #ffffff; /* 预览底色纯白 */
       border-radius: 8px;
       box-shadow: 0 4px 12px rgba(0,0,0,0.18);
     }
@@ -124,7 +124,7 @@
           <label for="fileInput">拼豆照片（建议正对拍摄，板子铺满画面）</label>
           <input id="fileInput" type="file" accept="image/*" capture="environment" />
           <div class="hint">
-            建议：在桌面贴一个白色拍摄框，让拼豆板尽量对齐框四边、充满画面。
+            建议：在桌面贴一个白色拍摄框，让拼豆板尽量对齐框四边、铺满画面，这样背景更容易被识别成纯白。
           </div>
         </div>
 
@@ -143,12 +143,12 @@
     </div>
   </div>
 
-  <!-- 工作画布，用于图像采样，隐藏即可 -->
+  <!-- 工作画布：用于图像采样，隐藏 -->
   <canvas id="workCanvas" width="240" height="320" style="display:none;"></canvas>
 
   <!-- Firebase + 核心逻辑 -->
   <script type="module">
-    // ---------------- Firebase 初始化 ----------------
+    // ------------- Firebase 初始化 -------------
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
     import { getDatabase, ref, set } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js";
 
@@ -164,7 +164,7 @@
     const app = initializeApp(firebaseConfig);
     const db = getDatabase(app);
 
-    // ---------------- 基本参数 ----------------
+    // ------------- 基本参数 -------------
     const rows = 32;
     const cols = 24;
 
@@ -212,7 +212,7 @@
       return bestHex;
     }
 
-    // 渲染预览像素图
+    // 预览绘制
     function renderPreview() {
       const cellW = preview.width / cols;
       const cellH = preview.height / rows;
@@ -225,7 +225,7 @@
         }
       }
 
-      // 画网格线（淡）
+      // 网格线（淡）
       previewCtx.strokeStyle = "rgba(0,0,0,0.08)";
       previewCtx.lineWidth = 1;
       for (let c = 0; c <= cols; c++) {
@@ -244,6 +244,13 @@
       }
     }
 
+    function setStatus(msg, type) {
+      statusEl.textContent = msg || "";
+      statusEl.className = "";
+      if (type === "ok") statusEl.classList.add("ok");
+      if (type === "err") statusEl.classList.add("err");
+    }
+
     // 处理上传图片
     fileInput.addEventListener("change", (e) => {
       const file = e.target.files[0];
@@ -251,11 +258,11 @@
       const url = URL.createObjectURL(file);
       const img = new Image();
       img.onload = () => {
-        // 将图片按“cover”方式画到工作画布上
         const cw = workCanvas.width;
         const ch = workCanvas.height;
         workCtx.clearRect(0, 0, cw, ch);
 
+        // 用 cover 方式铺满工作画布
         const scale = Math.max(cw / img.width, ch / img.height);
         const dw = img.width * scale;
         const dh = img.height * scale;
@@ -263,15 +270,28 @@
         const dy = (ch - dh) / 2;
         workCtx.drawImage(img, dx, dy, dw, dh);
 
-        // 抽样到 24x32
         const cellW = cw / cols;
         const cellH = ch / rows;
+
+        // 核心：采样时先判断是不是“接近白背景”，是的话直接变纯白
         for (let r = 0; r < rows; r++) {
           for (let c = 0; c < cols; c++) {
             const sx = Math.floor((c + 0.5) * cellW);
             const sy = Math.floor((r + 0.5) * cellH);
             const data = workCtx.getImageData(sx, sy, 1, 1).data;
-            const color = nearestColor(data[0], data[1], data[2]);
+            const [r0, g0, b0] = data;
+
+            const gray = 0.299 * r0 + 0.587 * g0 + 0.114 * b0;
+            const diff = Math.max(r0, g0, b0) - Math.min(r0, g0, b0);
+
+            let color;
+            // 非常亮且接近无彩色 → 认为是背景，强制白
+            if (gray > 235 && diff < 25) {
+              color = "#ffffff";
+            } else {
+              color = nearestColor(r0, g0, b0);
+            }
+
             gridData[r][c] = color;
           }
         }
@@ -289,13 +309,6 @@
       };
       img.src = url;
     });
-
-    function setStatus(msg, type) {
-      statusEl.textContent = msg || "";
-      statusEl.className = "";
-      if (type === "ok") statusEl.classList.add("ok");
-      if (type === "err") statusEl.classList.add("err");
-    }
 
     // 保存到 Firebase 角色库
     saveBtn.addEventListener("click", async () => {
