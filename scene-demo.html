@@ -2,7 +2,7 @@
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8" />
-  <title>数字皮影人 · 单场景 Demo</title>
+  <title>数字皮影人 · 单场景 Demo（语音版）</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <style>
     body {
@@ -40,13 +40,14 @@
       font-size: 14px;
     }
     button {
-      padding: 8px 14px;
+      padding: 8px 10px;
       border-radius: 6px;
       border: none;
       background: #c97a34;
       color: #fff;
-      font-size: 14px;
+      font-size: 13px;
       cursor: pointer;
+      white-space: nowrap;
     }
     button:disabled {
       opacity: 0.5;
@@ -82,12 +83,13 @@
   </style>
 </head>
 <body>
-  <h1>数字皮影人 · 单场景 Demo</h1>
-  <div class="sub">从角色库读取“孙悟空”，在云海佛光背景里播放一段简单动画。上方文本作为这幕的对白。</div>
+  <h1>数字皮影人 · 单场景 Demo（语音版）</h1>
+  <div class="sub">从角色库读取“孙悟空”，在云海佛光背景里播放一段简单动画。小朋友可以按住麦克风说一句话，系统自动识别成对白并播放。</div>
 
   <div class="top">
     <div class="top-row">
-      <input id="lineInput" type="text" placeholder="在这里输入小朋友说的一句话，例如：俺老孙来也！" />
+      <input id="lineInput" type="text" placeholder="文字对白会显示在这里，例如：俺老孙来也！" />
+      <button id="voiceBtn">按住说话</button>
       <button id="playBtn" disabled>播放</button>
     </div>
     <div id="status">正在加载角色数据…</div>
@@ -101,7 +103,7 @@
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
     import { getDatabase, ref, onValue } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js";
 
-    // 与 scan.html / character-viewer.html 一致的配置
+    // 与其他页面一致的 Firebase 配置
     const firebaseConfig = {
       apiKey: "AIzaSyCaRNjmy6kV0IK1zr8LRPRN-oEhrrFxrzk",
       authDomain: "shadow-draw-94af9.firebaseapp.com",
@@ -118,9 +120,10 @@
     const ctx = stage.getContext("2d");
     const statusEl = document.getElementById("status");
     const playBtn = document.getElementById("playBtn");
+    const voiceBtn = document.getElementById("voiceBtn");
     const lineInput = document.getElementById("lineInput");
 
-    let charImg = null;       // 存悟空预览图
+    let charImg = null;
     let charReady = false;
     let animRunning = false;
 
@@ -131,12 +134,11 @@
       if (type === "err") statusEl.classList.add("err");
     }
 
-    // 画背景：云海 + 远山 + 佛光
+    // 背景：云海 + 远山 + 佛光
     function drawBackground() {
       const w = stage.width;
       const h = stage.height;
 
-      // 天空渐变
       const sky = ctx.createLinearGradient(0, 0, 0, h);
       sky.addColorStop(0, "#fdf6e6");
       sky.addColorStop(0.4, "#f7e3c4");
@@ -144,7 +146,6 @@
       ctx.fillStyle = sky;
       ctx.fillRect(0, 0, w, h);
 
-      // 远处云海
       ctx.fillStyle = "rgba(255,255,255,0.6)";
       for (let i = 0; i < 12; i++) {
         const cx = (i / 11) * w;
@@ -156,7 +157,6 @@
         ctx.fill();
       }
 
-      // 远山剪影
       ctx.fillStyle = "#b78b55";
       ctx.beginPath();
       ctx.moveTo(0, h * 0.55);
@@ -170,14 +170,12 @@
       ctx.closePath();
       ctx.fill();
 
-      // 前景地面
       const ground = ctx.createLinearGradient(0, h * 0.6, 0, h);
       ground.addColorStop(0, "#d7a76c");
       ground.addColorStop(1, "#b77b3c");
       ctx.fillStyle = ground;
       ctx.fillRect(0, h * 0.6, w, h * 0.4);
 
-      // 佛光圆
       const r = Math.min(w, h) * 0.35;
       const grad = ctx.createRadialGradient(
         w * 0.7, h * 0.35, r * 0.1,
@@ -191,13 +189,11 @@
       ctx.arc(w * 0.7, h * 0.35, r, 0, Math.PI * 2);
       ctx.fill();
 
-      // 舞台边框
       ctx.strokeStyle = "rgba(90,52,16,0.6)";
       ctx.lineWidth = 4;
       ctx.strokeRect(8, 8, w - 16, h - 16);
     }
 
-    // 画对白气泡
     function drawSpeech(text) {
       if (!text) return;
       const w = stage.width;
@@ -209,7 +205,6 @@
       ctx.textAlign = "left";
       ctx.textBaseline = "top";
 
-      // 简单不换行：直接测量宽度
       const measure = ctx.measureText(text);
       const boxW = Math.min(maxWidth, measure.width + padding * 2);
       const boxH = 28;
@@ -217,7 +212,6 @@
       const x = 20;
       const y = 14;
 
-      // 气泡
       ctx.fillStyle = "rgba(255,252,242,0.9)";
       ctx.strokeStyle = "rgba(90,52,16,0.6)";
       ctx.lineWidth = 2;
@@ -226,7 +220,6 @@
       ctx.fill();
       ctx.stroke();
 
-      // 尾巴
       ctx.beginPath();
       ctx.moveTo(x + 40, y + boxH);
       ctx.lineTo(x + 32, y + boxH + 10);
@@ -235,12 +228,10 @@
       ctx.fill();
       ctx.stroke();
 
-      // 文字
       ctx.fillStyle = "#5a3410";
       ctx.fillText(text, x + padding, y + 6);
     }
 
-    // 动画主循环
     function playScene() {
       if (!charReady || animRunning) return;
       animRunning = true;
@@ -256,17 +247,16 @@
 
       function frame() {
         t += 1;
-        x += 2;              // 速度
-        const y = yBase + Math.sin(t / 10) * 4; // 微微上下
+        x += 2;
+        const y = yBase + Math.sin(t / 10) * 4;
 
-        // 清屏 + 背景
         ctx.clearRect(0, 0, w, h);
         drawBackground();
         drawSpeech(line);
 
         if (charImg) {
           ctx.save();
-          ctx.imageSmoothingEnabled = false; // 保留像素感
+          ctx.imageSmoothingEnabled = false;
           ctx.drawImage(charImg, x, y, charW, charH);
           ctx.restore();
         }
@@ -281,7 +271,7 @@
       frame();
     }
 
-    // 从 Firebase 读取悟空角色预览图
+    // 载入孙悟空角色
     const charRef = ref(db, "characters/sunwukong");
     onValue(charRef, snapshot => {
       const val = snapshot.val();
@@ -289,13 +279,13 @@
         drawBackground();
         setStatus("还没有扫描到孙悟空角色，请先在 scan.html 扫描并保存。", "err");
         playBtn.disabled = true;
+        voiceBtn.disabled = true;
         return;
       }
       charImg = new Image();
       charImg.onload = () => {
         charReady = true;
         drawBackground();
-        // 初次静态展示一下
         const w = stage.width;
         const h = stage.height;
         const charW = w * 0.32;
@@ -310,13 +300,15 @@
         ctx.drawImage(charImg, x, y, charW, charH);
         ctx.restore();
 
-        setStatus("已加载孙悟空角色，可以输入一句话并点击播放。", "ok");
+        setStatus("已加载孙悟空角色，可以按住麦克风说一句话，或直接输入文字后点击播放。", "ok");
         playBtn.disabled = false;
+        // 语音按钮是否可用由后面语音模块再判断
       };
       charImg.onerror = () => {
         drawBackground();
         setStatus("角色预览图加载失败。", "err");
         playBtn.disabled = true;
+        voiceBtn.disabled = true;
       };
       charImg.src = val.preview;
     }, err => {
@@ -324,13 +316,88 @@
       drawBackground();
       setStatus("读取角色数据失败。", "err");
       playBtn.disabled = true;
+      voiceBtn.disabled = true;
     });
 
     playBtn.addEventListener("click", () => {
       playScene();
     });
 
-    // 初始先画一张背景
+    // ----------- 语音识别部分（Web Speech API） -----------
+    let recognition = null;
+    let recognizing = false;
+
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+
+    if (!SpeechRecognition) {
+      voiceBtn.disabled = true;
+      voiceBtn.textContent = "语音不可用";
+      setStatus("当前浏览器不支持语音识别（建议用 Chrome/Edge 桌面或安卓）。", "err");
+    } else {
+      recognition = new SpeechRecognition();
+      recognition.lang = "zh-CN";
+      recognition.continuous = false;
+      recognition.interimResults = false;
+
+      recognition.onstart = () => {
+        recognizing = true;
+        voiceBtn.textContent = "正在聆听…松开结束";
+        setStatus("正在聆听，小朋友可以说一句话。", "ok");
+      };
+
+      recognition.onerror = (event) => {
+        console.error(event);
+        recognizing = false;
+        voiceBtn.textContent = "按住说话";
+        setStatus("语音识别出错，可以再试一次。", "err");
+      };
+
+      recognition.onend = () => {
+        recognizing = false;
+        voiceBtn.textContent = "按住说话";
+      };
+
+      recognition.onresult = (event) => {
+        const result = event.results[0][0].transcript.trim();
+        if (result) {
+          lineInput.value = result;
+          setStatus("识别结果：" + result, "ok");
+          // 自动播放动画
+          if (charReady) {
+            playScene();
+          }
+        }
+      };
+
+      // PC 上用 click / touch，装置现场可以设置成“按下开始、松开停止”
+      voiceBtn.addEventListener("mousedown", (e) => {
+        e.preventDefault();
+        if (recognizing) return;
+        recognition.start();
+      });
+      voiceBtn.addEventListener("mouseup", (e) => {
+        e.preventDefault();
+        if (recognizing) recognition.stop();
+      });
+      voiceBtn.addEventListener("mouseleave", (e) => {
+        // 鼠标拖出按钮区域时也停止
+        if (recognizing) recognition.stop();
+      });
+
+      // 触屏支持
+      voiceBtn.addEventListener("touchstart", (e) => {
+        e.preventDefault();
+        if (recognizing) return;
+        recognition.start();
+      }, { passive: false });
+
+      voiceBtn.addEventListener("touchend", (e) => {
+        e.preventDefault();
+        if (recognizing) recognition.stop();
+      }, { passive: false });
+    }
+
+    // 初始绘制背景
     drawBackground();
   </script>
 </body>
