@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <title>数字皮影人 · 角色库查看</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <style>
+    body {
+      margin: 0;
+      padding: 16px;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: #f6e3c2;
+      color: #4a3420;
+    }
+    h1 {
+      font-size: 20px;
+      margin: 0 0 4px;
+    }
+    .sub {
+      font-size: 13px;
+      color: #7a6144;
+      margin-bottom: 16px;
+    }
+    .wrap {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+    @media (min-width: 900px) {
+      .wrap {
+        flex-direction: row;
+      }
+    }
+    .card {
+      flex: 1;
+      background: #fdf6e6;
+      border-radius: 12px;
+      padding: 12px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.12);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 4px;
+    }
+    .name {
+      font-size: 16px;
+      font-weight: 600;
+      margin-bottom: 4px;
+    }
+    .id {
+      font-size: 11px;
+      color: #8a6b48;
+      margin-bottom: 6px;
+    }
+    canvas {
+      width: 240px;
+      height: 320px;
+      background: #ffffff;
+      border-radius: 8px;
+      box-shadow: 0 3px 8px rgba(0,0,0,0.15);
+      display: block;
+    }
+    .status {
+      font-size: 12px;
+      color: #8a6b48;
+      margin-top: 4px;
+      min-height: 1em;
+    }
+    .status.ok {
+      color: #1b7f42;
+    }
+    .status.err {
+      color: #b53030;
+    }
+  </style>
+</head>
+<body>
+  <h1>数字皮影人 · 角色库查看</h1>
+  <div class="sub">从 Firebase 读取角色网格数据，放大 10 倍显示为 240×320 像素拼豆图，用来检查扫描效果和统一风格。</div>
+
+  <div class="wrap">
+    <div class="card" data-char="sunwukong">
+      <div class="name">孙悟空</div>
+      <div class="id">ID: sunwukong</div>
+      <canvas width="240" height="320"></canvas>
+      <div class="status">等待加载…</div>
+    </div>
+    <div class="card" data-char="tangseng">
+      <div class="name">唐僧</div>
+      <div class="id">ID: tangseng</div>
+      <canvas width="240" height="320"></canvas>
+      <div class="status">等待加载…</div>
+    </div>
+    <div class="card" data-char="bajie">
+      <div class="name">猪八戒</div>
+      <div class="id">ID: bajie</div>
+      <canvas width="240" height="320"></canvas>
+      <div class="status">等待加载…</div>
+    </div>
+    <div class="card" data-char="shaseng">
+      <div class="name">沙僧</div>
+      <div class="id">ID: shaseng</div>
+      <canvas width="240" height="320"></canvas>
+      <div class="status">等待加载…</div>
+    </div>
+  </div>
+
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+    import { getDatabase, ref, onValue } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js";
+
+    // 与 scan.html 相同的配置
+    const firebaseConfig = {
+      apiKey: "AIzaSyCaRNjmy6kV0IK1zr8LRPRN-oEhrrFxrzk",
+      authDomain: "shadow-draw-94af9.firebaseapp.com",
+      projectId: "shadow-draw-94af9",
+      storageBucket: "shadow-draw-94af9.firebasestorage.app",
+      messagingSenderId: "1000953704742",
+      appId: "1:1000953704742:web:535a3d8291f84a645611e7"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const db = getDatabase(app);
+
+    const rows = 32;
+    const cols = 24;
+
+    function drawGrid(canvas, grid) {
+      const ctx = canvas.getContext("2d");
+      const cw = canvas.width;
+      const ch = canvas.height;
+      const cellW = cw / cols;
+      const cellH = ch / rows;
+
+      ctx.clearRect(0, 0, cw, ch);
+      ctx.fillStyle = "#ffffff";
+      ctx.fillRect(0, 0, cw, ch);
+
+      if (!grid) {
+        // 画一个提示
+        ctx.fillStyle = "#c0a27a";
+        ctx.font = "14px system-ui";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillText("暂无数据", cw / 2, ch / 2);
+        return;
+      }
+
+      for (let r = 0; r < rows; r++) {
+        for (let c = 0; c < cols; c++) {
+          const color = grid[r]?.[c] || "#ffffff";
+          ctx.fillStyle = color;
+          ctx.fillRect(c * cellW, r * cellH, cellW, cellH);
+        }
+      }
+
+      // 轻微网格线
+      ctx.strokeStyle = "rgba(0,0,0,0.08)";
+      ctx.lineWidth = 1;
+      for (let c = 0; c <= cols; c++) {
+        const x = c * cellW;
+        ctx.beginPath();
+        ctx.moveTo(x, 0);
+        ctx.lineTo(x, ch);
+        ctx.stroke();
+      }
+      for (let r = 0; r <= rows; r++) {
+        const y = r * cellH;
+        ctx.beginPath();
+        ctx.moveTo(0, y);
+        ctx.lineTo(cw, y);
+        ctx.stroke();
+      }
+    }
+
+    function setStatus(el, msg, type) {
+      el.textContent = msg || "";
+      el.className = "status";
+      if (type === "ok") el.classList.add("ok");
+      if (type === "err") el.classList.add("err");
+    }
+
+    // 对每个角色卡片绑定 Firebase 监听
+    document.querySelectorAll(".card").forEach(card => {
+      const charId = card.getAttribute("data-char");
+      const canvas = card.querySelector("canvas");
+      const statusEl = card.querySelector(".status");
+
+      const r = ref(db, "characters/" + charId);
+      onValue(r, snapshot => {
+        const val = snapshot.val();
+        if (!val || !val.grid) {
+          drawGrid(canvas, null);
+          setStatus(statusEl, "还没有扫描数据。", "");
+        } else {
+          drawGrid(canvas, val.grid);
+          const time = val.updatedAt ? new Date(val.updatedAt).toLocaleString() : "";
+          setStatus(statusEl, "已加载 · 最近更新：" + (time || "未知"), "ok");
+        }
+      }, err => {
+        console.error(err);
+        drawGrid(canvas, null);
+        setStatus(statusEl, "读取失败。", "err");
+      });
+    });
+  </script>
+</body>
+</html>
