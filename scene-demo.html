@@ -8,7 +8,7 @@
     body {
       margin: 0;
       padding: 16px;
-      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      font-family: system-ui, sans-serif;
       background: #f6e3c2;
       color: #4a3420;
     }
@@ -55,7 +55,6 @@
     }
     #status {
       font-size: 12px;
-      color: #8a6b48;
       min-height: 1em;
     }
     #status.ok { color: #1b7f42; }
@@ -72,7 +71,6 @@
       background: #fdf6e6;
       border-radius: 12px;
       box-shadow: 0 6px 16px rgba(0,0,0,0.18);
-      display: block;
     }
     @media (min-width: 768px) {
       #stage {
@@ -84,17 +82,15 @@
 </head>
 <body>
   <h1>数字皮影人 · 单场景 Demo（语音 + 后端）</h1>
-  <div class="sub">
-    小朋友说一句话 → 前端语音识别 → 把文字发给 HuggingFace Space → Space 返回悟空台词 + 动作 → 悟空按指令表演。
-  </div>
+  <div class="sub">小朋友说一句话 → 语音识别 → 发给 HuggingFace Space → 返回台词+动作 → 孙悟空表演。</div>
 
   <div class="top">
     <div class="top-row">
-      <input id="lineInput" type="text" placeholder="文字对白会显示在这里，例如：俺老孙来也！" />
+      <input id="lineInput" type="text" placeholder="对白会显示在这里" />
       <button id="voiceBtn">按住说话</button>
-      <button id="playBtn" disabled>用这句播放</button>
+      <button id="playBtn" disabled>播放</button>
     </div>
-    <div id="status">正在加载角色数据…</div>
+    <div id="status"></div>
   </div>
 
   <div class="stage-wrap">
@@ -105,9 +101,8 @@
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
     import { getDatabase, ref, onValue } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js";
 
-    // ====== 这里改成你自己的 Space 地址 ======
-    const SPACE_URL = "https://你的用户名-shadow-backend.hf.space";
-    // =======================================
+    // 已替换为你的 Space 根地址
+    const SPACE_URL = "https://xxxxxxxxxxt-shadow-backend.hf.space";
 
     const firebaseConfig = {
       apiKey: "AIzaSyCaRNjmy6kV0IK1zr8LRPRN-oEhrrFxrzk",
@@ -123,183 +118,30 @@
 
     const stage = document.getElementById("stage");
     const ctx = stage.getContext("2d");
-    const statusEl = document.getElementById("status");
-    const playBtn = document.getElementById("playBtn");
-    const voiceBtn = document.getElementById("voiceBtn");
+
     const lineInput = document.getElementById("lineInput");
+    const voiceBtn = document.getElementById("voiceBtn");
+    const playBtn = document.getElementById("playBtn");
+    const statusEl = document.getElementById("status");
 
     let charImg = null;
     let charReady = false;
     let animRunning = false;
-    let currentAction = "walk_right"; // 后端返回的动作：walk_right / jump / wave
+    let currentAction = "walk_right";
 
     function setStatus(msg, type) {
       statusEl.textContent = msg || "";
-      statusEl.className = "";
-      if (type === "ok") statusEl.classList.add("ok");
-      if (type === "err") statusEl.classList.add("err");
+      statusEl.className = type || "";
     }
 
-    // 背景
-    function drawBackground() {
-      const w = stage.width;
-      const h = stage.height;
-
-      const sky = ctx.createLinearGradient(0, 0, 0, h);
-      sky.addColorStop(0, "#fdf6e6");
-      sky.addColorStop(0.4, "#f7e3c4");
-      sky.addColorStop(1, "#e2c29a");
-      ctx.fillStyle = sky;
-      ctx.fillRect(0, 0, w, h);
-
-      ctx.fillStyle = "rgba(255,255,255,0.6)";
-      for (let i = 0; i < 12; i++) {
-        const cx = (i / 11) * w;
-        const cy = h * 0.45 + Math.sin(i) * 6;
-        const rw = w / 8;
-        const rh = h / 14;
-        ctx.beginPath();
-        ctx.ellipse(cx, cy, rw, rh, 0, 0, Math.PI * 2);
-        ctx.fill();
-      }
-
-      ctx.fillStyle = "#b78b55";
-      ctx.beginPath();
-      ctx.moveTo(0, h * 0.55);
-      ctx.lineTo(w * 0.2, h * 0.42);
-      ctx.lineTo(w * 0.4, h * 0.5);
-      ctx.lineTo(w * 0.6, h * 0.4);
-      ctx.lineTo(w * 0.8, h * 0.48);
-      ctx.lineTo(w, h * 0.45);
-      ctx.lineTo(w, h);
-      ctx.lineTo(0, h);
-      ctx.closePath();
-      ctx.fill();
-
-      const ground = ctx.createLinearGradient(0, h * 0.6, 0, h);
-      ground.addColorStop(0, "#d7a76c");
-      ground.addColorStop(1, "#b77b3c");
-      ctx.fillStyle = ground;
-      ctx.fillRect(0, h * 0.6, w, h * 0.4);
-
-      const r = Math.min(w, h) * 0.35;
-      const grad = ctx.createRadialGradient(
-        w * 0.7, h * 0.35, r * 0.1,
-        w * 0.7, h * 0.35, r
-      );
-      grad.addColorStop(0, "rgba(255,255,255,0.9)");
-      grad.addColorStop(0.4, "rgba(255,246,220,0.7)");
-      grad.addColorStop(1, "rgba(255,246,220,0)");
-      ctx.fillStyle = grad;
-      ctx.beginPath();
-      ctx.arc(w * 0.7, h * 0.35, r, 0, Math.PI * 2);
-      ctx.fill();
-
-      ctx.strokeStyle = "rgba(90,52,16,0.6)";
-      ctx.lineWidth = 4;
-      ctx.strokeRect(8, 8, w - 16, h - 16);
-    }
-
-    function drawSpeech(text) {
-      if (!text) return;
-      const w = stage.width;
-      const h = stage.height;
-
-      const padding = 8;
-      const maxWidth = w * 0.7;
-      ctx.font = "14px system-ui";
-      ctx.textAlign = "left";
-      ctx.textBaseline = "top";
-
-      const measure = ctx.measureText(text);
-      const boxW = Math.min(maxWidth, measure.width + padding * 2);
-      const boxH = 28;
-
-      const x = 20;
-      const y = 14;
-
-      ctx.fillStyle = "rgba(255,252,242,0.9)";
-      ctx.strokeStyle = "rgba(90,52,16,0.6)";
-      ctx.lineWidth = 2;
-      ctx.beginPath();
-      ctx.roundRect(x, y, boxW, boxH, 8);
-      ctx.fill();
-      ctx.stroke();
-
-      ctx.beginPath();
-      ctx.moveTo(x + 40, y + boxH);
-      ctx.lineTo(x + 32, y + boxH + 10);
-      ctx.lineTo(x + 54, y + boxH);
-      ctx.closePath();
-      ctx.fill();
-      ctx.stroke();
-
-      ctx.fillStyle = "#5a3410";
-      ctx.fillText(text, x + padding, y + 6);
-    }
-
-    function playScene() {
-      if (!charReady || animRunning) return;
-      animRunning = true;
-
-      const line = lineInput.value.trim() || "俺老孙来也！";
-      const w = stage.width;
-      const h = stage.height;
-      const charW = w * 0.32;
-      const charH = h * 0.7;
-      let x = -charW * 0.5;
-      const yBase = h * 0.60 - charH;
-      let t = 0;
-
-      function frame() {
-        t += 1;
-
-        if (currentAction === "walk_right") {
-          x += 2;
-        } else if (currentAction === "jump") {
-          x = w * 0.4;
-        } else if (currentAction === "wave") {
-          x = w * 0.4;
-        }
-
-        const yOffset =
-          currentAction === "jump"
-            ? Math.sin(t / 5) * 12
-            : Math.sin(t / 10) * 4;
-
-        const y = yBase + yOffset;
-
-        ctx.clearRect(0, 0, w, h);
-        drawBackground();
-        drawSpeech(line);
-
-        if (charImg) {
-          ctx.save();
-          ctx.imageSmoothingEnabled = false;
-          ctx.drawImage(charImg, x, y, charW, charH);
-          ctx.restore();
-        }
-
-        if (currentAction === "walk_right" && x < w + charW * 0.3) {
-          requestAnimationFrame(frame);
-        } else if (currentAction !== "walk_right" && t < 120) {
-          requestAnimationFrame(frame);
-        } else {
-          animRunning = false;
-        }
-      }
-
-      frame();
-    }
-
-    // 调 Space：把一句话发给后端，拿到 line+action，然后播放
-    async function callBackendAndPlay(userLine) {
+    // 调 Space 后端：输入一句话，拿到 { line, action }
+    async function callBackend(userLine) {
       const text = (userLine || "").trim();
       if (!text) {
-        setStatus("没有识别到内容。", "err");
+        setStatus("没有内容。", "err");
         return;
       }
-      setStatus("正在向后端生成悟空台词和动作…", "");
+      setStatus("正在向后端生成剧情…", "");
 
       try {
         const resp = await fetch(SPACE_URL + "/run/predict", {
@@ -311,144 +153,187 @@
         const result = await resp.json();
         const raw = result?.data?.[0] || "";
         let parsed;
-
         try {
           parsed = JSON.parse(raw);
-        } catch (e) {
+        } catch {
           parsed = { line: text, action: "walk_right" };
         }
 
         lineInput.value = parsed.line || text;
         currentAction = parsed.action || "walk_right";
-        setStatus("后端返回：动作 = " + currentAction, "ok");
-
-        if (charReady) playScene();
+        setStatus("后端返回动作：" + currentAction, "ok");
+        playScene();
       } catch (e) {
         console.error(e);
-        setStatus("调用后端失败，改用原始句子。", "err");
+        setStatus("调用后端失败，改用原句。", "err");
         currentAction = "walk_right";
-        if (charReady) playScene();
+        playScene();
       }
     }
 
-    // 载入孙悟空角色
+    // 画背景
+    function drawBackground() {
+      const w = stage.width;
+      const h = stage.height;
+
+      const sky = ctx.createLinearGradient(0, 0, 0, h);
+      sky.addColorStop(0, "#fdf6e6");
+      sky.addColorStop(1, "#e2c29a");
+      ctx.fillStyle = sky;
+      ctx.fillRect(0, 0, w, h);
+
+      ctx.strokeStyle = "rgba(90,52,16,0.6)";
+      ctx.lineWidth = 4;
+      ctx.strokeRect(8, 8, w - 16, h - 16);
+    }
+
+    function drawSpeech(text) {
+      if (!text) return;
+      ctx.fillStyle = "rgba(255,252,242,0.9)";
+      ctx.strokeStyle = "rgba(90,52,16,0.6)";
+      ctx.lineWidth = 2;
+
+      const boxW = 260;
+      const boxH = 30;
+
+      ctx.beginPath();
+      ctx.roundRect(20, 10, boxW, boxH, 8);
+      ctx.fill();
+      ctx.stroke();
+
+      ctx.fillStyle = "#5a3410";
+      ctx.font = "14px sans-serif";
+      ctx.fillText(text, 28, 28);
+    }
+
+    // 播放动画
+    function playScene() {
+      if (!charReady || animRunning) return;
+
+      animRunning = true;
+
+      const text = lineInput.value.trim() || "俺老孙来也！";
+      const w = stage.width;
+      const h = stage.height;
+
+      let x = -120;
+      const baseY = h * 0.6 - 200;
+      let t = 0;
+
+      function frame() {
+        t++;
+
+        if (currentAction === "walk_right") {
+          x += 2;
+        } else {
+          x = w * 0.4;
+        }
+
+        const yOffset =
+          currentAction === "jump"
+            ? Math.sin(t / 5) * 15
+            : Math.sin(t / 10) * 4;
+
+        ctx.clearRect(0, 0, w, h);
+        drawBackground();
+        drawSpeech(text);
+
+        if (charImg) {
+          ctx.save();
+          ctx.imageSmoothingEnabled = false;
+          ctx.drawImage(charImg, x, baseY + yOffset, 150, 220);
+          ctx.restore();
+        }
+
+        if (currentAction === "walk_right" && x < w + 80) {
+          requestAnimationFrame(frame);
+        } else if (currentAction !== "walk_right" && t < 90) {
+          requestAnimationFrame(frame);
+        } else {
+          animRunning = false;
+        }
+      }
+
+      frame();
+    }
+
+    // 从 Firebase 读取孙悟空
     const charRef = ref(db, "characters/sunwukong");
     onValue(charRef, snapshot => {
       const val = snapshot.val();
       if (!val || !val.preview) {
-        drawBackground();
-        setStatus("还没有扫描到孙悟空角色，请先在 scan.html 扫描并保存。", "err");
-        playBtn.disabled = true;
-        voiceBtn.disabled = true;
+        setStatus("请先到 scan.html 扫描并保存孙悟空。", "err");
         return;
       }
       charImg = new Image();
       charImg.onload = () => {
         charReady = true;
-        drawBackground();
-        const w = stage.width;
-        const h = stage.height;
-        const charW = w * 0.32;
-        const charH = h * 0.7;
-        const x = w * 0.15;
-        const y = h * 0.60 - charH;
-        ctx.clearRect(0, 0, w, h);
-        drawBackground();
-        drawSpeech("俺老孙在此……");
-        ctx.save();
-        ctx.imageSmoothingEnabled = false;
-        ctx.drawImage(charImg, x, y, charW, charH);
-        ctx.restore();
-
-        setStatus("已加载孙悟空。可以按住麦克风说一句话，或输入文字点击播放。", "ok");
+        setStatus("悟空加载完成，可以输入或语音。", "ok");
         playBtn.disabled = false;
-      };
-      charImg.onerror = () => {
         drawBackground();
-        setStatus("角色预览图加载失败。", "err");
-        playBtn.disabled = true;
-        voiceBtn.disabled = true;
+        ctx.drawImage(charImg, 60, 60, 150, 220);
       };
       charImg.src = val.preview;
-    }, err => {
-      console.error(err);
-      drawBackground();
-      setStatus("读取角色数据失败。", "err");
-      playBtn.disabled = true;
-      voiceBtn.disabled = true;
     });
 
+    // 手动播放按钮
     playBtn.addEventListener("click", () => {
-      const text = lineInput.value.trim();
-      callBackendAndPlay(text || "俺老孙来也！");
+      const text = lineInput.value.trim() || "俺老孙来也！";
+      callBackend(text);
     });
 
-    // ----------- 语音识别部分 -----------
-    let recognition = null;
-    let recognizing = false;
-
-    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    // 语音识别
+    const SpeechRecognition =
+      window.SpeechRecognition || window.webkitSpeechRecognition;
 
     if (!SpeechRecognition) {
       voiceBtn.disabled = true;
       voiceBtn.textContent = "语音不可用";
-      setStatus("当前浏览器不支持语音识别（建议用 Chrome/Edge）。", "err");
+      setStatus("当前浏览器不支持语音识别。", "err");
     } else {
-      recognition = new SpeechRecognition();
-      recognition.lang = "zh-CN";
-      recognition.continuous = false;
-      recognition.interimResults = false;
+      const recog = new SpeechRecognition();
+      recog.lang = "zh-CN";
+      recog.continuous = false;
+      recog.interimResults = false;
 
-      recognition.onstart = () => {
-        recognizing = true;
-        voiceBtn.textContent = "正在聆听…松开结束";
-        setStatus("正在聆听，小朋友可以说一句话。", "ok");
+      recog.onresult = e => {
+        const text = e.results[0][0].transcript.trim();
+        lineInput.value = text;
+        callBackend(text);
       };
 
-      recognition.onerror = (event) => {
-        console.error(event);
-        recognizing = false;
-        voiceBtn.textContent = "按住说话";
+      recog.onerror = () => {
         setStatus("语音识别出错，可以再试一次。", "err");
       };
 
-      recognition.onend = () => {
-        recognizing = false;
-        voiceBtn.textContent = "按住说话";
-      };
-
-      recognition.onresult = (event) => {
-        const result = event.results[0][0].transcript.trim();
-        if (result) {
-          lineInput.value = result;
-          setStatus("识别结果：" + result + "，正在向后端生成剧情…", "ok");
-          callBackendAndPlay(result);
-        }
-      };
-
-      voiceBtn.addEventListener("mousedown", (e) => {
+      voiceBtn.addEventListener("mousedown", e => {
         e.preventDefault();
-        if (recognizing) return;
-        recognition.start();
+        recog.start();
       });
-      voiceBtn.addEventListener("mouseup", (e) => {
+      voiceBtn.addEventListener("mouseup", e => {
         e.preventDefault();
-        if (recognizing) recognition.stop();
+        recog.stop();
       });
       voiceBtn.addEventListener("mouseleave", () => {
-        if (recognizing) recognition.stop();
+        recog.stop();
       });
 
-      voiceBtn.addEventListener("touchstart", (e) => {
-        e.preventDefault();
-        if (recognizing) return;
-        recognition.start();
-      }, { passive: false });
-
-      voiceBtn.addEventListener("touchend", (e) => {
-        e.preventDefault();
-        if (recognizing) recognition.stop();
-      }, { passive: false });
+      voiceBtn.addEventListener(
+        "touchstart",
+        e => {
+          e.preventDefault();
+          recog.start();
+        },
+        { passive: false }
+      );
+      voiceBtn.addEventListener(
+        "touchend",
+        e => {
+          e.preventDefault();
+          recog.stop();
+        },
+        { passive: false }
+      );
     }
 
     drawBackground();
