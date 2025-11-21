@@ -2,7 +2,7 @@
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8" />
-  <title>数字皮影人 · 单场景 Demo（语音 + 后端）</title>
+  <title>数字皮影人 · 单场景 Demo（语音 + 后端 + 多背景）</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <style>
     body {
@@ -81,8 +81,10 @@
   </style>
 </head>
 <body>
-  <h1>数字皮影人 · 单场景 Demo（语音 + 后端）</h1>
-  <div class="sub">小朋友说一句话 → 语音识别 → 发给 HuggingFace Space → 返回台词+动作 → 孙悟空表演。</div>
+  <h1>数字皮影人 · 单场景 Demo（语音 + 后端 + 多背景）</h1>
+  <div class="sub">
+    小朋友说一句话 → 语音识别 → 发给 HuggingFace Space → 后端返回台词 + 动作（预留场景类型）→ 孙悟空在不同布景下表演。
+  </div>
 
   <div class="top">
     <div class="top-row">
@@ -101,7 +103,7 @@
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
     import { getDatabase, ref, onValue } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js";
 
-    // 已替换为你的 Space 根地址
+    // 你的 Space 根地址（你说的那个）
     const SPACE_URL = "https://xxxxxxxxxxt-shadow-backend.hf.space";
 
     const firebaseConfig = {
@@ -128,13 +130,151 @@
     let charReady = false;
     let animRunning = false;
     let currentAction = "walk_right";
+    let currentScene = "default"; // default / mountain / sea / heaven / temple
 
     function setStatus(msg, type) {
       statusEl.textContent = msg || "";
       statusEl.className = type || "";
     }
 
-    // 调 Space 后端：输入一句话，拿到 { line, action }
+    // 根据场景类型画不同皮影背景
+    function drawBackground(scene) {
+      const w = stage.width;
+      const h = stage.height;
+
+      // 通用底色
+      const sky = ctx.createLinearGradient(0, 0, 0, h);
+      sky.addColorStop(0, "#fdf6e6");
+      sky.addColorStop(0.4, "#f7e3c4");
+      sky.addColorStop(1, "#e2c29a");
+      ctx.fillStyle = sky;
+      ctx.fillRect(0, 0, w, h);
+
+      // 不同场景的差异部分
+      if (scene === "mountain" || scene === "default") {
+        // 云海
+        ctx.fillStyle = "rgba(255,255,255,0.7)";
+        for (let i = 0; i < 12; i++) {
+          const cx = (i / 11) * w;
+          const cy = h * 0.45 + Math.sin(i) * 6;
+          const rw = w / 8;
+          const rh = h / 14;
+          ctx.beginPath();
+          ctx.ellipse(cx, cy, rw, rh, 0, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        // 远山
+        ctx.fillStyle = "#b78b55";
+        ctx.beginPath();
+        ctx.moveTo(0, h * 0.55);
+        ctx.lineTo(w * 0.2, h * 0.42);
+        ctx.lineTo(w * 0.4, h * 0.5);
+        ctx.lineTo(w * 0.6, h * 0.4);
+        ctx.lineTo(w * 0.8, h * 0.48);
+        ctx.lineTo(w, h * 0.45);
+        ctx.lineTo(w, h);
+        ctx.lineTo(0, h);
+        ctx.closePath();
+        ctx.fill();
+      } else if (scene === "sea") {
+        // 海浪
+        ctx.fillStyle = "rgba(255,255,255,0.7)";
+        for (let i = 0; i < 10; i++) {
+          const cx = (i / 9) * w;
+          const cy = h * 0.6 + Math.sin(i * 1.3) * 5;
+          const rw = w / 9;
+          const rh = h / 18;
+          ctx.beginPath();
+          ctx.ellipse(cx, cy, rw, rh, 0, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        const seaGrad = ctx.createLinearGradient(0, h * 0.55, 0, h);
+        seaGrad.addColorStop(0, "#4f7ea8");
+        seaGrad.addColorStop(1, "#24496b");
+        ctx.fillStyle = seaGrad;
+        ctx.fillRect(0, h * 0.55, w, h * 0.45);
+      } else if (scene === "heaven") {
+        // 云层更多，天更亮
+        ctx.fillStyle = "rgba(255,255,255,0.85)";
+        for (let i = 0; i < 14; i++) {
+          const cx = (i / 13) * w;
+          const cy = h * 0.38 + Math.sin(i * 0.8) * 6;
+          const rw = w / 9;
+          const rh = h / 18;
+          ctx.beginPath();
+          ctx.ellipse(cx, cy, rw, rh, 0, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      } else if (scene === "temple") {
+        // 地面＋庙宇剪影
+        const ground = ctx.createLinearGradient(0, h * 0.6, 0, h);
+        ground.addColorStop(0, "#d7a76c");
+        ground.addColorStop(1, "#b77b3c");
+        ctx.fillStyle = ground;
+        ctx.fillRect(0, h * 0.6, w, h * 0.4);
+
+        ctx.fillStyle = "rgba(90,52,16,0.9)";
+        const baseY = h * 0.55;
+        ctx.beginPath();
+        ctx.moveTo(w * 0.55, baseY);
+        ctx.lineTo(w * 0.7, baseY);
+        ctx.lineTo(w * 0.675, baseY - 20);
+        ctx.lineTo(w * 0.575, baseY - 20);
+        ctx.closePath();
+        ctx.fill();
+
+        ctx.fillRect(w * 0.58, baseY, w * 0.12, 30);
+      }
+
+      // 佛光（所有场景共享）
+      const r = Math.min(w, h) * 0.35;
+      const grad = ctx.createRadialGradient(
+        w * 0.7, h * 0.35, r * 0.1,
+        w * 0.7, h * 0.35, r
+      );
+      grad.addColorStop(0, "rgba(255,255,255,0.9)");
+      grad.addColorStop(0.4, "rgba(255,246,220,0.7)");
+      grad.addColorStop(1, "rgba(255,246,220,0)");
+      ctx.fillStyle = grad;
+      ctx.beginPath();
+      ctx.arc(w * 0.7, h * 0.35, r, 0, Math.PI * 2);
+      ctx.fill();
+
+      // 前景地面（非 sea 时）
+      if (scene !== "sea") {
+        const ground = ctx.createLinearGradient(0, h * 0.6, 0, h);
+        ground.addColorStop(0, "#d7a76c");
+        ground.addColorStop(1, "#b77b3c");
+        ctx.fillStyle = ground;
+        ctx.fillRect(0, h * 0.6, w, h * 0.4);
+      }
+
+      // 舞台边框
+      ctx.strokeStyle = "rgba(90,52,16,0.6)";
+      ctx.lineWidth = 4;
+      ctx.strokeRect(8, 8, w - 16, h - 16);
+    }
+
+    function drawSpeech(text) {
+      if (!text) return;
+      ctx.fillStyle = "rgba(255,252,242,0.9)";
+      ctx.strokeStyle = "rgba(90,52,16,0.6)";
+      ctx.lineWidth = 2;
+
+      const boxW = 260;
+      const boxH = 30;
+
+      ctx.beginPath();
+      ctx.roundRect(20, 10, boxW, boxH, 8);
+      ctx.fill();
+      ctx.stroke();
+
+      ctx.fillStyle = "#5a3410";
+      ctx.font = "14px sans-serif";
+      ctx.fillText(text, 28, 28);
+    }
+
+    // 调 Space 后端：输入一句话，拿到 { line, action, scene? }
     async function callBackend(userLine) {
       const text = (userLine || "").trim();
       if (!text) {
@@ -161,52 +301,47 @@
 
         lineInput.value = parsed.line || text;
         currentAction = parsed.action || "walk_right";
-        setStatus("后端返回动作：" + currentAction, "ok");
+
+        // 预留：如果后端以后返回 scene 字段，就直接用
+        if (parsed.scene) {
+          currentScene = parsed.scene;
+        } else {
+          // 现在用关键词简单决定场景
+          if (/海|龙宫|水/.test(text)) {
+            currentScene = "sea";
+          } else if (/天宫|仙|云/.test(text)) {
+            currentScene = "heaven";
+          } else if (/寺|庙|佛|塔/.test(text)) {
+            currentScene = "temple";
+          } else if (/山|花果山/.test(text)) {
+            currentScene = "mountain";
+          } else {
+            currentScene = "default";
+          }
+        }
+
+        setStatus("后端返回动作：" + currentAction + " · 场景：" + currentScene, "ok");
         playScene();
       } catch (e) {
         console.error(e);
         setStatus("调用后端失败，改用原句。", "err");
         currentAction = "walk_right";
+        // 调用失败时也用关键词决定场景
+        if (/海|龙宫|水/.test(text)) {
+          currentScene = "sea";
+        } else if (/天宫|仙|云/.test(text)) {
+          currentScene = "heaven";
+        } else if (/寺|庙|佛|塔/.test(text)) {
+          currentScene = "temple";
+        } else if (/山|花果山/.test(text)) {
+          currentScene = "mountain";
+        } else {
+          currentScene = "default";
+        }
         playScene();
       }
     }
 
-    // 画背景
-    function drawBackground() {
-      const w = stage.width;
-      const h = stage.height;
-
-      const sky = ctx.createLinearGradient(0, 0, 0, h);
-      sky.addColorStop(0, "#fdf6e6");
-      sky.addColorStop(1, "#e2c29a");
-      ctx.fillStyle = sky;
-      ctx.fillRect(0, 0, w, h);
-
-      ctx.strokeStyle = "rgba(90,52,16,0.6)";
-      ctx.lineWidth = 4;
-      ctx.strokeRect(8, 8, w - 16, h - 16);
-    }
-
-    function drawSpeech(text) {
-      if (!text) return;
-      ctx.fillStyle = "rgba(255,252,242,0.9)";
-      ctx.strokeStyle = "rgba(90,52,16,0.6)";
-      ctx.lineWidth = 2;
-
-      const boxW = 260;
-      const boxH = 30;
-
-      ctx.beginPath();
-      ctx.roundRect(20, 10, boxW, boxH, 8);
-      ctx.fill();
-      ctx.stroke();
-
-      ctx.fillStyle = "#5a3410";
-      ctx.font = "14px sans-serif";
-      ctx.fillText(text, 28, 28);
-    }
-
-    // 播放动画
     function playScene() {
       if (!charReady || animRunning) return;
 
@@ -235,7 +370,7 @@
             : Math.sin(t / 10) * 4;
 
         ctx.clearRect(0, 0, w, h);
-        drawBackground();
+        drawBackground(currentScene);
         drawSpeech(text);
 
         if (charImg) {
@@ -258,7 +393,8 @@
     }
 
     // 从 Firebase 读取孙悟空
-    const charRef = ref(db, "characters/sunwukong");
+    const charRef =
+      ref(db, "characters/sunwukong");
     onValue(charRef, snapshot => {
       const val = snapshot.val();
       if (!val || !val.preview) {
@@ -270,7 +406,8 @@
         charReady = true;
         setStatus("悟空加载完成，可以输入或语音。", "ok");
         playBtn.disabled = false;
-        drawBackground();
+        currentScene = "default";
+        drawBackground(currentScene);
         ctx.drawImage(charImg, 60, 60, 150, 220);
       };
       charImg.src = val.preview;
@@ -336,7 +473,8 @@
       );
     }
 
-    drawBackground();
+    // 初始画一张默认背景
+    drawBackground(currentScene);
   </script>
 </body>
 </html>
