@@ -2,7 +2,7 @@
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8" />
-  <title>数字皮影人 · 单场景 Demo（语音版）</title>
+  <title>数字皮影人 · 单场景 Demo（语音 + 后端）</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <style>
     body {
@@ -83,14 +83,16 @@
   </style>
 </head>
 <body>
-  <h1>数字皮影人 · 单场景 Demo（语音版）</h1>
-  <div class="sub">从角色库读取“孙悟空”，在云海佛光背景里播放一段简单动画。小朋友可以按住麦克风说一句话，系统自动识别成对白并播放。</div>
+  <h1>数字皮影人 · 单场景 Demo（语音 + 后端）</h1>
+  <div class="sub">
+    小朋友说一句话 → 前端语音识别 → 把文字发给 HuggingFace Space → Space 返回悟空台词 + 动作 → 悟空按指令表演。
+  </div>
 
   <div class="top">
     <div class="top-row">
       <input id="lineInput" type="text" placeholder="文字对白会显示在这里，例如：俺老孙来也！" />
       <button id="voiceBtn">按住说话</button>
-      <button id="playBtn" disabled>播放</button>
+      <button id="playBtn" disabled>用这句播放</button>
     </div>
     <div id="status">正在加载角色数据…</div>
   </div>
@@ -103,7 +105,10 @@
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
     import { getDatabase, ref, onValue } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js";
 
-    // 与其他页面一致的 Firebase 配置
+    // ====== 这里改成你自己的 Space 地址 ======
+    const SPACE_URL = "https://你的用户名-shadow-backend.hf.space";
+    // =======================================
+
     const firebaseConfig = {
       apiKey: "AIzaSyCaRNjmy6kV0IK1zr8LRPRN-oEhrrFxrzk",
       authDomain: "shadow-draw-94af9.firebaseapp.com",
@@ -126,6 +131,7 @@
     let charImg = null;
     let charReady = false;
     let animRunning = false;
+    let currentAction = "walk_right"; // 后端返回的动作：walk_right / jump / wave
 
     function setStatus(msg, type) {
       statusEl.textContent = msg || "";
@@ -134,7 +140,7 @@
       if (type === "err") statusEl.classList.add("err");
     }
 
-    // 背景：云海 + 远山 + 佛光
+    // 背景
     function drawBackground() {
       const w = stage.width;
       const h = stage.height;
@@ -247,8 +253,21 @@
 
       function frame() {
         t += 1;
-        x += 2;
-        const y = yBase + Math.sin(t / 10) * 4;
+
+        if (currentAction === "walk_right") {
+          x += 2;
+        } else if (currentAction === "jump") {
+          x = w * 0.4;
+        } else if (currentAction === "wave") {
+          x = w * 0.4;
+        }
+
+        const yOffset =
+          currentAction === "jump"
+            ? Math.sin(t / 5) * 12
+            : Math.sin(t / 10) * 4;
+
+        const y = yBase + yOffset;
 
         ctx.clearRect(0, 0, w, h);
         drawBackground();
@@ -261,7 +280,9 @@
           ctx.restore();
         }
 
-        if (x < w + charW * 0.3) {
+        if (currentAction === "walk_right" && x < w + charW * 0.3) {
+          requestAnimationFrame(frame);
+        } else if (currentAction !== "walk_right" && t < 120) {
           requestAnimationFrame(frame);
         } else {
           animRunning = false;
@@ -269,6 +290,45 @@
       }
 
       frame();
+    }
+
+    // 调 Space：把一句话发给后端，拿到 line+action，然后播放
+    async function callBackendAndPlay(userLine) {
+      const text = (userLine || "").trim();
+      if (!text) {
+        setStatus("没有识别到内容。", "err");
+        return;
+      }
+      setStatus("正在向后端生成悟空台词和动作…", "");
+
+      try {
+        const resp = await fetch(SPACE_URL + "/run/predict", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ data: [text] })
+        });
+
+        const result = await resp.json();
+        const raw = result?.data?.[0] || "";
+        let parsed;
+
+        try {
+          parsed = JSON.parse(raw);
+        } catch (e) {
+          parsed = { line: text, action: "walk_right" };
+        }
+
+        lineInput.value = parsed.line || text;
+        currentAction = parsed.action || "walk_right";
+        setStatus("后端返回：动作 = " + currentAction, "ok");
+
+        if (charReady) playScene();
+      } catch (e) {
+        console.error(e);
+        setStatus("调用后端失败，改用原始句子。", "err");
+        currentAction = "walk_right";
+        if (charReady) playScene();
+      }
     }
 
     // 载入孙悟空角色
@@ -300,9 +360,8 @@
         ctx.drawImage(charImg, x, y, charW, charH);
         ctx.restore();
 
-        setStatus("已加载孙悟空角色，可以按住麦克风说一句话，或直接输入文字后点击播放。", "ok");
+        setStatus("已加载孙悟空。可以按住麦克风说一句话，或输入文字点击播放。", "ok");
         playBtn.disabled = false;
-        // 语音按钮是否可用由后面语音模块再判断
       };
       charImg.onerror = () => {
         drawBackground();
@@ -320,10 +379,11 @@
     });
 
     playBtn.addEventListener("click", () => {
-      playScene();
+      const text = lineInput.value.trim();
+      callBackendAndPlay(text || "俺老孙来也！");
     });
 
-    // ----------- 语音识别部分（Web Speech API） -----------
+    // ----------- 语音识别部分 -----------
     let recognition = null;
     let recognizing = false;
 
@@ -332,7 +392,7 @@
     if (!SpeechRecognition) {
       voiceBtn.disabled = true;
       voiceBtn.textContent = "语音不可用";
-      setStatus("当前浏览器不支持语音识别（建议用 Chrome/Edge 桌面或安卓）。", "err");
+      setStatus("当前浏览器不支持语音识别（建议用 Chrome/Edge）。", "err");
     } else {
       recognition = new SpeechRecognition();
       recognition.lang = "zh-CN";
@@ -361,15 +421,11 @@
         const result = event.results[0][0].transcript.trim();
         if (result) {
           lineInput.value = result;
-          setStatus("识别结果：" + result, "ok");
-          // 自动播放动画
-          if (charReady) {
-            playScene();
-          }
+          setStatus("识别结果：" + result + "，正在向后端生成剧情…", "ok");
+          callBackendAndPlay(result);
         }
       };
 
-      // PC 上用 click / touch，装置现场可以设置成“按下开始、松开停止”
       voiceBtn.addEventListener("mousedown", (e) => {
         e.preventDefault();
         if (recognizing) return;
@@ -379,12 +435,10 @@
         e.preventDefault();
         if (recognizing) recognition.stop();
       });
-      voiceBtn.addEventListener("mouseleave", (e) => {
-        // 鼠标拖出按钮区域时也停止
+      voiceBtn.addEventListener("mouseleave", () => {
         if (recognizing) recognition.stop();
       });
 
-      // 触屏支持
       voiceBtn.addEventListener("touchstart", (e) => {
         e.preventDefault();
         if (recognizing) return;
@@ -397,7 +451,6 @@
       }, { passive: false });
     }
 
-    // 初始绘制背景
     drawBackground();
   </script>
 </body>
