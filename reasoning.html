@@ -1,0 +1,140 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <title>AI 行为推理网页 · reasoning.html</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Helvetica Neue", "PingFang SC",
+                   "Microsoft YaHei", sans-serif;
+      background: #f5f5f5;
+      margin: 0;
+      padding: 40px 16px;
+    }
+    .box {
+      max-width: 600px;
+      margin: 0 auto;
+      background: #ffffff;
+      border-radius: 12px;
+      padding: 24px 20px 28px;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.06);
+    }
+    h1 {
+      font-size: 20px;
+      margin: 0 0 10px;
+    }
+    p.desc {
+      font-size: 14px;
+      color: #555;
+      margin: 0 0 20px;
+    }
+    label {
+      font-size: 14px;
+      margin-right: 8px;
+    }
+    select {
+      padding: 4px 8px;
+      font-size: 14px;
+      margin-right: 16px;
+    }
+    button {
+      padding: 6px 14px;
+      font-size: 14px;
+      border-radius: 20px;
+      border: none;
+      cursor: pointer;
+      background: #111;
+      color: #fff;
+    }
+    button:hover {
+      opacity: 0.9;
+    }
+    .result-title {
+      margin-top: 22px;
+      font-weight: 600;
+      font-size: 15px;
+    }
+    .result-box {
+      margin-top: 8px;
+      padding: 12px 14px;
+      border-radius: 8px;
+      background: #fafafa;
+      border: 1px solid #eee;
+      font-size: 14px;
+      white-space: pre-line;
+    }
+    small {
+      display: block;
+      margin-top: 16px;
+      font-size: 12px;
+      color: #888;
+    }
+  </style>
+</head>
+<body>
+  <div class="box">
+    <h1>AI 行为推理网页（reasoning.html）</h1>
+    <p class="desc">下拉框选两个角色 → 点击按钮 → 显示 AI 推理结果。</p>
+
+    <div style="margin-bottom: 14px;">
+      <label for="roleA">角色 A：</label>
+      <select id="roleA">
+        <option value="sunwukong">孙悟空</option>
+        <option value="bajie">猪八戒</option>
+        <option value="tangseng">唐僧</option>
+      </select>
+
+      <label for="roleB">角色 B：</label>
+      <select id="roleB">
+        <option value="bajie">猪八戒</option>
+        <option value="sunwukong">孙悟空</option>
+        <option value="tangseng">唐僧</option>
+      </select>
+
+      <button id="runBtn">显示推理结果</button>
+    </div>
+
+    <div class="result-title">AI 推理结果：</div>
+    <div id="result" class="result-box">
+      （请选择两个角色，然后点击按钮）
+    </div>
+
+    <small>💡 这是 AI 产品 #2 ：AI Reasoning Engine（用 if / else 实现的超简易推理引擎）</small>
+  </div>
+
+  <script>
+    // 非常简单的 if / else 规则引擎
+    function reasoning(a, b) {
+      // 示例一：孙悟空靠近八戒 —— 激活事件：斗嘴
+      if (a === "sunwukong" && b === "bajie") {
+        return "孙悟空靠近八戒 —— 激活事件：斗嘴";
+      }
+
+      // 示例二：唐僧靠近悟空 —— 激活事件：念紧箍咒
+      if (a === "tangseng" && b === "sunwukong") {
+        return "唐僧靠近悟空 —— 激活事件：念紧箍咒";
+
+      }
+
+      // 其他简单规则你可以自己加：
+      if (a === "bajie" && b === "sunwukong") {
+        return "猪八戒靠近孙悟空 —— 激活事件：吐槽师兄";
+      }
+
+      if (a === b) {
+        return "同一个角色靠近自己 —— 暂无特别事件。";
+      }
+
+      // 默认情况
+      return "这两个角色目前没有特别设置的事件（可在代码中继续添加 if / else 规则）。";
+    }
+
+    document.getElementById("runBtn").addEventListener("click", function () {
+      var a = document.getElementById("roleA").value;
+      var b = document.getElementById("roleB").value;
+      var text = reasoning(a, b);
+      document.getElementById("result").textContent = text;
+    });
+  </script>
+</body>
+</html>
