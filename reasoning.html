@@ -12,7 +12,7 @@
       padding: 40px 16px;
     }
     .box {
-      max-width: 600px;
+      max-width: 640px;
       margin: 0 auto;
       background: #ffffff;
       border-radius: 12px;
@@ -74,13 +74,14 @@
 <body>
   <div class="box">
     <h1>AI 行为推理网页（reasoning.html）</h1>
-    <p class="desc">下拉框选两个角色 → 点击按钮 → 显示 AI 推理结果。</p>
+    <p class="desc">从下拉框中选择两个角色，点击按钮，查看 AI 推理出来的《西游记》行为结果。</p>
 
     <div style="margin-bottom: 14px;">
       <label for="roleA">角色 A：</label>
       <select id="roleA">
         <option value="sunwukong">孙悟空</option>
         <option value="bajie">猪八戒</option>
+        <option value="sha">沙僧</option>
         <option value="tangseng">唐僧</option>
       </select>
 
@@ -88,6 +89,7 @@
       <select id="roleB">
         <option value="bajie">猪八戒</option>
         <option value="sunwukong">孙悟空</option>
+        <option value="sha">沙僧</option>
         <option value="tangseng">唐僧</option>
       </select>
 
@@ -99,34 +101,84 @@
       （请选择两个角色，然后点击按钮）
     </div>
 
-    <small>💡 这是 AI 产品 #2 ：AI Reasoning Engine（用 if / else 实现的超简易推理引擎）</small>
+    <small>💡 这是 AI 产品 #2 ：AI Reasoning Engine（用 if / else 实现的超简易推理引擎）。</small>
   </div>
 
   <script>
+    // 把内部英文代码名映射成中文名，方便统一输出
+    function nameCN(code) {
+      if (code === "sunwukong") return "孙悟空";
+      if (code === "bajie")     return "猪八戒";
+      if (code === "sha")       return "沙僧";
+      if (code === "tangseng")  return "唐僧";
+      return code;
+    }
+
     // 非常简单的 if / else 规则引擎
     function reasoning(a, b) {
-      // 示例一：孙悟空靠近八戒 —— 激活事件：斗嘴
+      var A = nameCN(a);
+      var B = nameCN(b);
+
+      // ---- 自己遇到自己：4 种 ----
+      if (a === "sunwukong" && b === "sunwukong") {
+        return A + "对着自己的影子比武 —— 激活事件：自我训练，翻筋斗云热身。";
+      }
+      if (a === "bajie" && b === "bajie") {
+        return A + "和另一只自己讨论去哪儿找好吃的 —— 激活事件：计划下一顿。";
+      }
+      if (a === "sha" && b === "sha") {
+        return A + "默默挑担前行 —— 激活事件：稳重前进，无事生非。";
+      }
+      if (a === "tangseng" && b === "tangseng") {
+        return A + "合十念经，为西行之路祈福 —— 激活事件：加持团队气运。";
+      }
+
+      // ---- 孙悟空出发：3 种 ----
       if (a === "sunwukong" && b === "bajie") {
-        return "孙悟空靠近八戒 —— 激活事件：斗嘴";
+        return A + "靠近" + B + " —— 激活事件：斗嘴，互相揭短。";
+      }
+      if (a === "sunwukong" && b === "sha") {
+        return A + "靠近" + B + " —— 激活事件：一起商量如何对付下一个妖怪。";
+      }
+      if (a === "sunwukong" && b === "tangseng") {
+        return A + "靠近" + B + " —— 激活事件：被师父善意提醒，要遵守戒律（紧箍咒预警）。";
       }
 
-      // 示例二：唐僧靠近悟空 —— 激活事件：念紧箍咒
-      if (a === "tangseng" && b === "sunwukong") {
-        return "唐僧靠近悟空 —— 激活事件：念紧箍咒";
-
-      }
-
-      // 其他简单规则你可以自己加：
+      // ---- 猪八戒出发：3 种 ----
       if (a === "bajie" && b === "sunwukong") {
-        return "猪八戒靠近孙悟空 —— 激活事件：吐槽师兄";
+        return A + "靠近" + B + " —— 激活事件：小声抱怨师兄太凶，结果被瞪了一眼。";
+      }
+      if (a === "bajie" && b === "sha") {
+        return A + "靠近" + B + " —— 激活事件：想把担子往沙僧那边多推一点。";
+      }
+      if (a === "bajie" && b === "tangseng") {
+        return A + "靠近" + B + " —— 激活事件：立刻装乖，诉苦想多休息一会儿。";
       }
 
-      if (a === b) {
-        return "同一个角色靠近自己 —— 暂无特别事件。";
+      // ---- 沙僧出发：3 种 ----
+      if (a === "sha" && b === "sunwukong") {
+        return A + "靠近" + B + " —— 激活事件：温和劝悟空低调行事，别把事情闹太大。";
+      }
+      if (a === "sha" && b === "bajie") {
+        return A + "靠近" + B + " —— 激活事件：提醒八戒别偷懒，路还长着呢。";
+      }
+      if (a === "sha" && b === "tangseng") {
+        return A + "靠近" + B + " —— 激活事件：提高警惕，护法站位，防止妖怪突然袭击。";
       }
 
-      // 默认情况
-      return "这两个角色目前没有特别设置的事件（可在代码中继续添加 if / else 规则）。";
+      // ---- 唐僧出发：3 种 ----
+      if (a === "tangseng" && b === "sunwukong") {
+        return A + "靠近" + B + " —— 激活事件：语重心长地劝悟空莫要伤生，必要时准备念紧箍咒。";
+      }
+      if (a === "tangseng" && b === "bajie") {
+        return A + "靠近" + B + " —— 激活事件：劝戒八戒勿贪吃懒惰，要专心取经。";
+      }
+      if (a === "tangseng" && b === "sha") {
+        return A + "靠近" + B + " —— 激活事件：赞赏沙僧稳重可靠，是团队中最踏实的一位。";
+      }
+
+      // 理论上不会走到这里，但防止漏写
+      return A + "靠近" + B + " —— 暂无特别事件（可以在代码里继续补充规则）。";
     }
 
     document.getElementById("runBtn").addEventListener("click", function () {
