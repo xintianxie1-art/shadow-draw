@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <title>数字皮影人 · AI 系统</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+    body {
+      min-height: 100vh;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: radial-gradient(circle at top, #fff7e0 0, #f4dfb5 40%, #e4c59a 100%);
+      color: #3b2a16;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 24px 12px;
+    }
+    .shell {
+      max-width: 900px;
+      width: 100%;
+      background: rgba(253, 246, 230, 0.96);
+      border-radius: 18px;
+      box-shadow: 0 18px 45px rgba(0,0,0,0.18);
+      padding: 24px 20px 20px;
+      border: 1px solid rgba(255,255,255,0.7);
+    }
+    @media (min-width: 768px) {
+      .shell {
+        padding: 32px 32px 26px;
+      }
+    }
+    .title {
+      font-size: 22px;
+      letter-spacing: 0.06em;
+      font-weight: 650;
+      text-align: left;
+    }
+    .subtitle {
+      margin-top: 6px;
+      font-size: 13px;
+      color: #7e5f3a;
+    }
+    .divider {
+      margin: 16px 0 18px;
+      height: 1px;
+      background: linear-gradient(to right, #b08a56, transparent);
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 12px;
+    }
+    @media (min-width: 720px) {
+      .grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+    }
+    .item {
+      display: flex;
+      gap: 10px;
+      align-items: flex-start;
+      padding: 12px 12px;
+      border-radius: 12px;
+      background: rgba(255,255,255,0.9);
+      box-shadow: 0 5px 14px rgba(0,0,0,0.06);
+      border: 1px solid rgba(255,255,255,0.9);
+      transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
+      text-decoration: none;
+      color: inherit;
+    }
+    .item:hover {
+      transform: translateY(-3px);
+      box-shadow: 0 10px 24px rgba(0,0,0,0.12);
+      border-color: rgba(216, 176, 116, 0.8);
+    }
+    .index-badge {
+      flex-shrink: 0;
+      width: 26px;
+      height: 26px;
+      border-radius: 999px;
+      border: 1px solid #c59b65;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 14px;
+      font-weight: 600;
+      background: #f3e0bd;
+    }
+    .item-main {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    .item-title {
+      font-size: 15px;
+      font-weight: 600;
+    }
+    .item-tag {
+      font-size: 11px;
+      color: #b27c36;
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+    }
+    .item-desc {
+      font-size: 12px;
+      color: #765537;
+      margin-top: 2px;
+    }
+    .footer {
+      margin-top: 18px;
+      font-size: 11px;
+      color: #6f5337;
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: space-between;
+      gap: 6px;
+    }
+    .footer strong {
+      font-weight: 600;
+    }
+    .scene-link {
+      margin-top: 10px;
+      font-size: 12px;
+      text-align: right;
+    }
+    .scene-link a {
+      color: #9b5a16;
+      text-decoration: none;
+      border-bottom: 1px dashed rgba(155,90,22,0.4);
+    }
+    .scene-link a:hover {
+      border-bottom-style: solid;
+    }
+  </style>
+</head>
+<body>
+  <main class="shell">
+    <header>
+      <div class="title">数字皮影人 · AI 系统</div>
+      <div class="subtitle">
+        一个基于 GitHub Pages 的教学实验项目：<br />
+        用拼豆 + 扫描 + 简单 AI 逻辑，模拟“数字皮影戏”的完整工作流。
+      </div>
+      <div class="divider"></div>
+    </header>
+
+    <section class="grid">
+      <!-- 1 拼豆扫描（AI 像素化） -> scan.html -->
+      <a class="item" href="scan.html">
+        <div class="index-badge">①</div>
+        <div class="item-main">
+          <div class="item-title">拼豆扫描（AI 像素化）</div>
+          <div class="item-tag">SCAN · PIXELIZATION</div>
+          <div class="item-desc">
+            上传实体拼豆角色照片，自动提取 32×24 网格颜色，生成可用于后续处理的像素化数据。
+          </div>
+        </div>
+      </a>
+
+      <!-- 2 角色像素库 -> character-viewer.html -->
+      <a class="item" href="character-viewer.html">
+        <div class="index-badge">②</div>
+        <div class="item-main">
+          <div class="item-title">角色像素库</div>
+          <div class="item-tag">CHARACTER GRID VIEWER</div>
+          <div class="item-desc">
+            从云端读取孙悟空、唐僧、猪八戒、沙僧等角色的网格数据，放大为 240×320 拼豆图，用于风格检查。
+          </div>
+        </div>
+      </a>
+
+      <!-- 3 AI 调色板生成 -> palette.html -->
+      <a class="item" href="palette.html">
+        <div class="index-badge">③</div>
+        <div class="item-main">
+          <div class="item-title">AI 调色板生成</div>
+          <div class="item-tag">PALETTE · COLOR AI</div>
+          <div class="item-desc">
+            通过上传角色图像自动抽取主色，生成皮影/拼豆专用调色板，辅助角色配色与材料选择。
+          </div>
+        </div>
+      </a>
+
+      <!-- 4 AI 行为推理 -> reasoning.html -->
+      <a class="item" href="reasoning.html">
+        <div class="index-badge">④</div>
+        <div class="item-main">
+          <div class="item-title">AI 行为推理</div>
+          <div class="item-tag">STORY · LOGIC ENGINE</div>
+          <div class="item-desc">
+            在两个西游角色之间建立简单的行为逻辑关系，自动生成片段式故事，用于数字皮影戏情节设计。
+          </div>
+        </div>
+      </a>
+    </section>
+
+    <!-- 可选：场景 Demo 入口（如果你想给老师看一个“整合演示”） -->
+    <div class="scene-link">
+      场景整合演示页：<a href="scene-demo.html">scene-demo.html</a>
+    </div>
+
+    <footer class="footer">
+      <div><strong>系统化展示页</strong> · 老师打开 GitHub Pages 即可看到完整产品结构。</div>
+      <div>Shadow Draw · 2025</div>
+    </footer>
+  </main>
+</body>
+</html>
