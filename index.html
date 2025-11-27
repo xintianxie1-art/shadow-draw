@@ -60,6 +60,11 @@
         grid-template-columns: repeat(2, minmax(0, 1fr));
       }
     }
+    @media (min-width: 1100px) {
+      .grid {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+      }
+    }
     .item {
       display: flex;
       gap: 10px;
@@ -120,9 +125,6 @@
       justify-content: space-between;
       gap: 6px;
     }
-    .footer strong {
-      font-weight: 600;
-    }
     .scene-link {
       margin-top: 10px;
       font-size: 12px;
@@ -138,75 +140,88 @@
     }
   </style>
 </head>
+
 <body>
   <main class="shell">
     <header>
       <div class="title">数字皮影人 · AI 系统</div>
       <div class="subtitle">
-        一个基于 GitHub Pages 的教学实验项目：<br />
-        用拼豆 + 扫描 + 简单 AI 逻辑，模拟“数字皮影戏”的完整工作流。
+        基于 GitHub Pages 的教学实验项目：<br>
+        拼豆扫描 → 像素库 → 调色 → 行为逻辑 → AI 视频生成。
       </div>
       <div class="divider"></div>
     </header>
 
     <section class="grid">
-      <!-- 1 拼豆扫描（AI 像素化） -> scan.html -->
+      <!-- 1 -->
       <a class="item" href="scan.html">
         <div class="index-badge">①</div>
         <div class="item-main">
           <div class="item-title">拼豆扫描（AI 像素化）</div>
           <div class="item-tag">SCAN · PIXELIZATION</div>
           <div class="item-desc">
-            上传实体拼豆角色照片，自动提取 32×24 网格颜色，生成可用于后续处理的像素化数据。
+            上传拼豆角色照片，自动提取 32×24 网格颜色数据。
           </div>
         </div>
       </a>
 
-      <!-- 2 角色像素库 -> character-viewer.html -->
+      <!-- 2 -->
       <a class="item" href="character-viewer.html">
         <div class="index-badge">②</div>
         <div class="item-main">
           <div class="item-title">角色像素库</div>
-          <div class="item-tag">CHARACTER GRID VIEWER</div>
+          <div class="item-tag">CHARACTER GRID</div>
           <div class="item-desc">
-            从云端读取孙悟空、唐僧、猪八戒、沙僧等角色的网格数据，放大为 240×320 拼豆图，用于风格检查。
+            查看孙悟空、唐僧、八戒、沙僧等像素风角色。
           </div>
         </div>
       </a>
 
-      <!-- 3 AI 调色板生成 -> palette.html -->
+      <!-- 3 -->
       <a class="item" href="palette.html">
         <div class="index-badge">③</div>
         <div class="item-main">
           <div class="item-title">AI 调色板生成</div>
-          <div class="item-tag">PALETTE · COLOR AI</div>
+          <div class="item-tag">COLOR AI</div>
           <div class="item-desc">
-            通过上传角色图像自动抽取主色，生成皮影/拼豆专用调色板，辅助角色配色与材料选择。
+            从上传图像中自动提取主色，生成皮影调色板。
           </div>
         </div>
       </a>
 
-      <!-- 4 AI 行为推理 -> reasoning.html -->
+      <!-- 4 -->
       <a class="item" href="reasoning.html">
         <div class="index-badge">④</div>
         <div class="item-main">
           <div class="item-title">AI 行为推理</div>
-          <div class="item-tag">STORY · LOGIC ENGINE</div>
+          <div class="item-tag">STORY ENGINE</div>
           <div class="item-desc">
-            在两个西游角色之间建立简单的行为逻辑关系，自动生成片段式故事，用于数字皮影戏情节设计。
+            让任意两个角色产生一个西游情节的交互结果。
           </div>
         </div>
       </a>
+
+      <!-- ⭐ 新增 ⑤ AI 视频生成模块 -->
+      <a class="item" href="ai-video.html">
+        <div class="index-badge">⑤</div>
+        <div class="item-main">
+          <div class="item-title">AI 视频生成（拼豆 → 场景）</div>
+          <div class="item-tag">VIDEO AI</div>
+          <div class="item-desc">
+            使用上传的拼豆角色与场景图，自动生成 12 帧动画并合成 GIF，模拟 AI 视频生成过程。
+          </div>
+        </div>
+      </a>
+
     </section>
 
-    <!-- 可选：场景 Demo 入口（如果你想给老师看一个“整合演示”） -->
     <div class="scene-link">
       场景整合演示页：<a href="scene-demo.html">scene-demo.html</a>
     </div>
 
     <footer class="footer">
-      <div><strong>系统化展示页</strong> · 老师打开 GitHub Pages 即可看到完整产品结构。</div>
-      <div>Shadow Draw · 2025</div>
+      <div><strong>系统化展示页</strong> · 老师打开 GitHub Pages 即可看到完整产品。</div>
+      <div>Shadow-Draw · 2025</div>
     </footer>
   </main>
 </body>
