@@ -69,33 +69,35 @@ small {
 
 <div class="container">
   <h1>AI 视频生成（基于拼豆角色 + AI 场景）</h1>
-  <p>
-    上传你的拼豆角色图 → 系统自动提取角色配色，<b>生成 AI 场景背景</b> → 自动生成 12 帧动画 → 合成 GIF，模拟“扩散模型生成视频”的全过程。
-  </p>
+  <p>上传拼豆角色图 → 自动提取角色配色 → 生成 AI 场景背景 → 合成 12 帧 GIF，模拟 AI 生成的视频。</p>
 
   <label>① 上传拼豆角色</label><br>
   <input id="charImg" type="file" accept="image/*">
-  <small>系统会自动根据角色颜色生成动态 AI 背景，无需再上传场景图。</small>
+  <small>背景由系统根据角色颜色自动生成，无需上传背景图。</small>
+
+  <!-- ❌ 这块已经删掉了，不再有“上传背景图” -->
+  <!--
+  <label>② 上传场景背景</label><br>
+  <input id="bgImg" type="file" accept="image/*">
+  -->
 
   <button onclick="generate()">生成 AI 视频（GIF）</button>
 
   <div id="log"></div>
-
   <div id="preview"></div>
 </div>
 
-<!-- gif.js，用于前端合成 gif -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/gif.js/0.2.0/gif.js"></script>
 
 <script>
-// 日志输出
+// 日志
 function log(msg) {
   const box = document.getElementById("log");
   box.innerHTML += msg + "<br>";
   box.scrollTop = box.scrollHeight;
 }
 
-// 读取图片
+// 读图
 async function loadImage(file) {
   return new Promise(resolve => {
     const img = new Image();
@@ -104,7 +106,7 @@ async function loadImage(file) {
   });
 }
 
-// 简单“AI 配色提取”：计算角色图的平均颜色
+// 从角色图里提取主色
 function getAverageColor(img) {
   const canvas = document.createElement("canvas");
   const ctx = canvas.getContext("2d");
@@ -118,7 +120,7 @@ function getAverageColor(img) {
   let r = 0, g = 0, b = 0, count = 0;
   for (let i = 0; i < data.length; i += 4) {
     const alpha = data[i + 3];
-    if (alpha < 40) continue; // 忽略太透明的像素
+    if (alpha < 40) continue;
     r += data[i];
     g += data[i + 1];
     b += data[i + 2];
@@ -131,16 +133,12 @@ function getAverageColor(img) {
   return { r, g, b };
 }
 
-// 生成互补色，模拟“风格迁移”
+// 互补色
 function getComplementColor({ r, g, b }) {
-  return {
-    r: 255 - r,
-    g: 255 - g,
-    b: 255 - b
-  };
+  return { r: 255 - r, g: 255 - g, b: 255 - b };
 }
 
-// 帮助函数：rgb → CSS 字符串
+// rgb → 字符串
 function rgbStr({ r, g, b }, alpha = 1) {
   return `rgba(${r}, ${g}, ${b}, ${alpha})`;
 }
@@ -153,20 +151,18 @@ async function generate() {
     return;
   }
 
-  // 清空之前生成结果
   document.getElementById("preview").innerHTML = "";
   document.getElementById("log").innerHTML = "";
 
   log("✔ 加载拼豆角色图...");
   const charImg = await loadImage(charFile);
 
-  log("🧠 正在分析角色图特征（提取颜色分布 & 风格向量）...");
+  log("🧠 正在分析角色图特征（提取颜色 & 风格向量）...");
   const mainColor = getAverageColor(charImg);
   const compColor = getComplementColor(mainColor);
   log(`🎨 检测到角色主色：rgb(${mainColor.r}, ${mainColor.g}, ${mainColor.b})`);
-  log("🎛 构建 AI 场景生成器（基于角色配色 + 噪声场）...");
 
-  log("🚀 开始生成关键帧（角色动作 + AI 场景）...");
+  log("🚀 开始生成关键帧（AI 场景 + 角色动作）...");
   const gif = new GIF({
     workers: 2,
     quality: 12
@@ -177,11 +173,10 @@ async function generate() {
   canvas.width = 480;
   canvas.height = 320;
 
-  // 生成 12 帧
   for (let i = 0; i < 12; i++) {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-    // === 1. AI 背景：动态渐变 + 光斑，模拟扩散模型里“流动的潜空间” ===
+    // === AI 背景：动态渐变 + 光斑 ===
     const t = i / 12;
     const cx = canvas.width / 2 + Math.sin(t * Math.PI * 2) * 80;
     const cy = canvas.height / 2 + Math.cos(t * Math.PI * 2) * 60;
@@ -197,7 +192,6 @@ async function generate() {
     ctx.fillStyle = grad;
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-    // 叠加一些“噪声光点”，看起来更像 AI 生成的梦境场景
     const dots = 30;
     for (let j = 0; j < dots; j++) {
       const angle = (j / dots) * Math.PI * 2 + t * 2;
@@ -214,7 +208,7 @@ async function generate() {
       ctx.fill();
     }
 
-    // === 2. 角色：轻微抖动 + 细微缩放，模拟“AI 动作生成” ===
+    // === 角色抖动 + 微缩放 ===
     const offsetX = Math.sin(i * 0.5) * 6;
     const offsetY = Math.cos(i * 0.5) * 4;
     const scale   = 1 + Math.sin(i * 0.4) * 0.05;
@@ -223,14 +217,12 @@ async function generate() {
     const h = charImg.height * scale * 0.8;
 
     ctx.globalAlpha = 0.95 + Math.sin(i * 0.3) * 0.05;
-
     ctx.drawImage(
       charImg,
       canvas.width / 2 - w / 2 + offsetX,
       canvas.height / 2 - h / 2 + offsetY,
       w, h
     );
-
     ctx.globalAlpha = 1;
 
     gif.addFrame(canvas, { delay: 100 });
@@ -242,177 +234,6 @@ async function generate() {
 
   gif.on('finished', function(blob) {
     log("🎉 视频生成完成！");
-    const url = URL.createObjectURL(blob);
-    document.getElementById("preview").innerHTML =
-      `<h3>AI 生成结果：</h3>
-       <img id="gif" src="${url}">
-       <br><br>
-       <a download="AI-video.gif" href="${url}">
-         点击下载 AI-video.gif
-       </a>`;
-  });
-
-  gif.render();
-}
-</script>
-
-</body>
-</html>
-<!DOCTYPE html>
-<html lang="zh-CN">
-<head>
-<meta charset="UTF-8" />
-<title>数字皮影人 · AI 视频生成系统（伪）</title>
-<meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<style>
-body {
-  background: #f7e9c9;
-  font-family: system-ui;
-  padding: 20px;
-  color: #4a3a27;
-}
-.container {
-  max-width: 900px;
-  margin: auto;
-  background: #fffdf6;
-  padding: 20px;
-  border-radius: 16px;
-  box-shadow: 0 12px 32px rgba(0,0,0,0.15);
-}
-h1 { margin-bottom: 10px; }
-label { font-size: 14px; font-weight: 600; }
-input { margin: 8px 0 18px; }
-#log {
-  background: #1b1b1b;
-  color: #eee;
-  padding: 10px;
-  border-radius: 8px;
-  margin-top: 10px;
-  height: 140px;
-  overflow-y: auto;
-  font-family: monospace;
-  font-size: 12px;
-}
-#preview {
-  margin-top: 20px;
-  text-align: center;
-}
-#gif {
-  max-width: 100%;
-  border-radius: 12px;
-  box-shadow: 0 8px 24px rgba(0,0,0,0.25);
-}
-button {
-  padding: 12px 20px;
-  margin-top: 8px;
-  width: 100%;
-  border: none;
-  background: #d29a38;
-  color: white;
-  border-radius: 10px;
-  font-size: 15px;
-  cursor: pointer;
-}
-</style>
-</head>
-<body>
-
-<div class="container">
-  <h1>AI 视频生成（基于拼豆角色 + 场景）</h1>
-  <p>上传拼豆角色图 & 场景图 → 自动生成 12 帧动画 → 合成 GIF → 模拟 AI 生成的视频。</p>
-
-  <label>① 上传拼豆角色</label><br>
-  <input id="charImg" type="file" accept="image/*">
-
-  <label>② 上传场景背景</label><br>
-  <input id="bgImg" type="file" accept="image/*">
-
-  <button onclick="generate()">生成 AI 视频（GIF）</button>
-
-  <div id="log"></div>
-
-  <div id="preview"></div>
-</div>
-
-<script src="https://cdnjs.cloudflare.com/ajax/libs/gif.js/0.2.0/gif.js"></script>
-
-<script>
-function log(msg) {
-  const box = document.getElementById("log");
-  box.innerHTML += msg + "<br>";
-  box.scrollTop = box.scrollHeight;
-}
-
-async function loadImage(file) {
-  return new Promise(resolve => {
-    const img = new Image();
-    img.onload = () => resolve(img);
-    img.src = URL.createObjectURL(file);
-  });
-}
-
-async function generate() {
-  const charFile = document.getElementById("charImg").files[0];
-  const bgFile   = document.getElementById("bgImg").files[0];
-
-  if (!charFile || !bgFile) {
-    log("❌ 必须先上传角色图和背景图");
-    return;
-  }
-
-  log("✔ 加载拼豆角色图...");
-  const charImg = await loadImage(charFile);
-
-  log("✔ 加载场景背景图...");
-  const bgImg = await loadImage(bgFile);
-
-  log("🚀 开始生成关键帧...");
-  const gif = new GIF({
-    workers: 2,
-    quality: 12
-  });
-
-  const canvas = document.createElement("canvas");
-  const ctx = canvas.getContext("2d");
-  canvas.width = 480;
-  canvas.height = 320;
-
-  // 生成 12 帧
-  for (let i = 0; i < 12; i++) {
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-    // 背景
-    ctx.drawImage(bgImg, 0, 0, canvas.width, canvas.height);
-
-    // 角色：轻微抖动模拟“AI动作”
-    const offsetX = Math.sin(i * 0.5) * 6;
-    const offsetY = Math.cos(i * 0.5) * 4;
-    const scale   = 1 + Math.sin(i * 0.4) * 0.05;
-
-    const w = charImg.width * scale * 0.8;
-    const h = charImg.height * scale * 0.8;
-
-    ctx.globalAlpha = 0.9 + Math.sin(i * 0.3) * 0.1;
-
-    ctx.drawImage(
-      charImg,
-      canvas.width/2 - w/2 + offsetX,
-      canvas.height/2 - h/2 + offsetY,
-      w, h
-    );
-
-    ctx.globalAlpha = 1;
-
-    gif.addFrame(canvas, { delay: 100 });
-    log(`✔ 生成关键帧 ${i+1}/12`);
-  }
-
-  log("🧪 AI 补帧模拟中...");
-  log("🎞 正在合成 GIF...");
-
-  gif.on('finished', function(blob) {
-    log("🎉 视频生成完成！");
-
     const url = URL.createObjectURL(blob);
     document.getElementById("preview").innerHTML =
       `<h3>AI 生成结果：</h3>
