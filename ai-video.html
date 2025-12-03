@@ -2,7 +2,7 @@
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8" />
-<title>数字皮影人 · AI 视频生成系统（实时预览版）</title>
+<title>数字皮影人 · AI 视频生成系统（导出视频版）</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <style>
 body {
@@ -37,7 +37,7 @@ input { margin: 8px 0 18px; }
   margin-top: 20px;
   text-align: center;
 }
-canvas {
+canvas, video {
   max-width: 100%;
   border-radius: 12px;
   box-shadow: 0 8px 24px rgba(0,0,0,0.25);
@@ -68,21 +68,21 @@ small {
 <body>
 
 <div class="container">
-  <h1>AI 视频生成（双角色 · 实时预览版）</h1>
+  <h1>AI 视频生成（双角色 · 导出视频版）</h1>
   <p>
-    上传两个拼豆角色 → 提取角色 A 配色生成 AI 场景背景 →
-    让两个角色在场景中相遇 / 对话，<b>以实时动画的形式播放</b>，模拟 AI 生成的视频。
+    上传两个拼豆角色 → 提取角色 A 的颜色生成 AI 场景 → 
+    让两人在场景中相遇 / 对话 → <b>录制 5 秒动画并导出真正的视频文件（webm）</b>。
   </p>
 
   <label>① 上传角色 A（例如孙悟空）</label><br>
   <input id="charImgA" type="file" accept="image/*">
-  <small>系统会使用角色 A 的颜色生成 AI 场景背景。</small>
+  <small>系统会根据角色 A 的颜色生成 AI 场景背景。</small>
 
-  <label>② 上传角色 B（例如唐僧/猪八戒/沙僧）</label><br>
+  <label>② 上传角色 B（例如唐僧 / 猪八戒 / 沙僧）</label><br>
   <input id="charImgB" type="file" accept="image/*">
-  <small>角色 B 将从另一侧进入，与角色 A 产生互动。</small>
+  <small>角色 B 会从另一侧进入，与角色 A 产生互动。</small>
 
-  <button id="genBtn" onclick="generate()">生成并播放 AI 视频</button>
+  <button id="genBtn" onclick="generate()">生成 AI 视频（约 5 秒）</button>
 
   <div id="log"></div>
   <div id="preview"></div>
@@ -105,7 +105,7 @@ async function loadImage(file) {
   });
 }
 
-// 从角色图里提取主色
+// 提取主色
 function getAverageColor(img) {
   const canvas = document.createElement("canvas");
   const ctx = canvas.getContext("2d");
@@ -153,7 +153,6 @@ async function generate() {
     return;
   }
 
-  // 如果之前有动画，先停掉
   if (animId !== null) {
     cancelAnimationFrame(animId);
     animId = null;
@@ -168,30 +167,73 @@ async function generate() {
   log("✔ 加载角色 B 图像...");
   const imgB = await loadImage(fileB);
 
-  log("🧠 分析角色 A 配色，生成 AI 场景风格向量...");
+  log("🧠 分析角色 A 配色，构建 AI 场景风格向量...");
   const mainColor = getAverageColor(imgA);
   const compColor = getComplementColor(mainColor);
   log(`🎨 角色 A 主色：rgb(${mainColor.r}, ${mainColor.g}, ${mainColor.b})`);
 
-  // 创建 canvas 作为“视频播放器”
+  // 创建 canvas
   const canvas = document.createElement("canvas");
   canvas.width = 480;
   canvas.height = 320;
   const ctx = canvas.getContext("2d");
   document.getElementById("preview").appendChild(canvas);
 
-  log("🚀 实时渲染 AI 场景 + 双角色互动动画中...");
+  // ====== 模拟“调用 AI 视频生成接口” ======
+  log("🌐 调用 AI 视频生成接口（模拟中：基于角色图 + 场景向量生成关键帧）...");
+  // 这里原本可以 fetch 真正的后端接口，
+  // 现在我们用前端算法 + MediaRecorder 实现本地生成。
+  // =====================================
 
-  let startTime = null;
+  // 使用 MediaRecorder 录制 canvas 动画
+  const stream = canvas.captureStream(30); // 30fps
+  let recorder;
+  let chunks = [];
 
-  function renderFrame(timestamp) {
-    if (!startTime) startTime = timestamp;
-    const elapsed = timestamp - startTime;
-    const t = (elapsed / 2000) % 1;  // 2 秒一个循环，0 ~ 1
+  try {
+    recorder = new MediaRecorder(stream, {
+      mimeType: 'video/webm;codecs=vp9'
+    });
+  } catch (e) {
+    // 某些浏览器可能不支持 vp9，就退回到默认
+    recorder = new MediaRecorder(stream);
+  }
+
+  recorder.ondataavailable = e => {
+    if (e.data && e.data.size > 0) {
+      chunks.push(e.data);
+    }
+  };
+
+  recorder.onstop = () => {
+    log("🎉 AI 视频生成完成（录制结束）！");
+    const blob = new Blob(chunks, { type: 'video/webm' });
+    const url = URL.createObjectURL(blob);
+
+    const html = `
+      <h3>AI 生成视频结果：</h3>
+      <video controls src="${url}"></video>
+      <br><br>
+      <a href="${url}" download="ai-video.webm">点击下载 ai-video.webm</a>
+    `;
+    document.getElementById("preview").innerHTML = html;
+  };
+
+  // 开始录制
+  chunks = [];
+  recorder.start();
+  log("🎥 开始录制 AI 场景动画（约 5 秒）...");
+
+  const recordDuration = 5000; // 5 秒
+  const startTime = performance.now();
+
+  function renderFrame(now) {
+    const elapsed = now - startTime;
+    const t = (elapsed / recordDuration) % 1;  // 0 ~ 1
 
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-    // === 1. AI 背景：动态渐变 + 光斑 ===
+    // === 1. AI 场景背景（动态渐变 + 光斑） ===
     const cx = canvas.width / 2 + Math.sin(t * Math.PI * 2) * 80;
     const cy = canvas.height / 2 + Math.cos(t * Math.PI * 2) * 60;
 
@@ -223,16 +265,16 @@ async function generate() {
     }
 
     // === 2. 双角色互动轨迹 ===
-    const baseY = canvas.height * 0.7;
+    const baseY = canvas.height * 0.72;
 
-    // 角色 A：左向中间
-    const aProgress = t; // 0 -> 1
-    const ax = canvas.width * (0.1 + 0.3 * aProgress);
+    // 角色 A：从左侧向中间移动
+    const aProgress = Math.min(1, t * 1.2); // 稍微快一点
+    const ax = canvas.width * (0.12 + 0.25 * aProgress);
     const ay = baseY + Math.sin(t * Math.PI * 2) * 5;
 
-    // 角色 B：右向中间
-    const bProgress = t;
-    const bx = canvas.width * (0.9 - 0.3 * bProgress);
+    // 角色 B：从右侧向中间移动
+    const bProgress = Math.min(1, (t - 0.1) * 1.2 + 0.1);
+    const bx = canvas.width * (0.88 - 0.25 * Math.max(0, bProgress));
     const by = baseY + Math.cos(t * Math.PI * 2) * 5;
 
     const scaleA = 0.6 + Math.sin(t * Math.PI) * 0.05;
@@ -240,7 +282,6 @@ async function generate() {
 
     const wA = imgA.width * scaleA;
     const hA = imgA.height * scaleA;
-
     const wB = imgB.width * scaleB;
     const hB = imgB.height * scaleB;
 
@@ -264,8 +305,8 @@ async function generate() {
 
     ctx.globalAlpha = 1;
 
-    // 中间几乎“对话”的时候，画一条光带
-    if (t > 0.3 && t < 0.7) {
+    // 中间时刻加一条“对话光带”
+    if (t > 0.3 && t < 0.8) {
       ctx.beginPath();
       const midY = baseY - 40;
       const opacity = 0.35 + Math.sin(t * Math.PI) * 0.2;
@@ -276,11 +317,17 @@ async function generate() {
       ctx.stroke();
     }
 
-    animId = requestAnimationFrame(renderFrame);
+    if (elapsed < recordDuration) {
+      animId = requestAnimationFrame(renderFrame);
+    } else {
+      cancelAnimationFrame(animId);
+      animId = null;
+      recorder.stop();
+      log("⏹ 停止录制，正在生成视频文件...");
+    }
   }
 
   animId = requestAnimationFrame(renderFrame);
-  log("✅ 实时 AI 视频已开始播放（循环动画，可用于课堂展示）。");
 }
 </script>
 
