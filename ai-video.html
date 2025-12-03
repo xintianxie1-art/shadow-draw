@@ -28,7 +28,7 @@ input { margin: 8px 0 18px; }
   padding: 10px;
   border-radius: 8px;
   margin-top: 10px;
-  height: 140px;
+  height: 160px;
   overflow-y: auto;
   font-family: monospace;
   font-size: 12px;
@@ -68,18 +68,19 @@ small {
 <body>
 
 <div class="container">
-  <h1>AI 视频生成（基于拼豆角色 + AI 场景）</h1>
-  <p>上传拼豆角色图 → 自动提取角色配色 → 生成 AI 场景背景 → 合成 12 帧 GIF，模拟 AI 生成的视频。</p>
+  <h1>AI 视频生成（双角色互动版）</h1>
+  <p>
+    上传两个拼豆角色 → 自动提取角色 A 配色生成 AI 场景 → 
+    让两个角色在场景中“相遇 / 对话” → 合成 12 帧 GIF，模拟 AI 生成的视频。
+  </p>
 
-  <label>① 上传拼豆角色</label><br>
-  <input id="charImg" type="file" accept="image/*">
-  <small>背景由系统根据角色颜色自动生成，无需上传背景图。</small>
+  <label>① 上传角色 A（比如：孙悟空）</label><br>
+  <input id="charImgA" type="file" accept="image/*">
+  <small>系统会基于角色 A 的颜色生成 AI 场景背景。</small>
 
-  <!-- ❌ 这块已经删掉了，不再有“上传背景图” -->
-  <!--
-  <label>② 生成场景背景</label><br>
-  <input id="bgImg" type="file" accept="image/*">
-  -->
+  <label>② 上传角色 B（比如：唐僧/猪八戒/沙僧）</label><br>
+  <input id="charImgB" type="file" accept="image/*">
+  <small>角色 B 将从另一侧进入，与角色 A 产生互动。</small>
 
   <button onclick="generate()">生成 AI 视频（GIF）</button>
 
@@ -87,6 +88,7 @@ small {
   <div id="preview"></div>
 </div>
 
+<!-- gif.js，用于前端合成 gif -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/gif.js/0.2.0/gif.js"></script>
 
 <script>
@@ -106,7 +108,7 @@ async function loadImage(file) {
   });
 }
 
-// 从角色图里提取主色
+// 从角色图里提取主色（用于生成背景）
 function getAverageColor(img) {
   const canvas = document.createElement("canvas");
   const ctx = canvas.getContext("2d");
@@ -144,28 +146,35 @@ function rgbStr({ r, g, b }, alpha = 1) {
 }
 
 async function generate() {
-  const charFile = document.getElementById("charImg").files[0];
+  const fileA = document.getElementById("charImgA").files[0];
+  const fileB = document.getElementById("charImgB").files[0];
 
-  if (!charFile) {
-    log("❌ 必须先上传角色图");
+  if (!fileA || !fileB) {
+    log("❌ 需要同时上传角色 A 和角色 B");
     return;
   }
 
   document.getElementById("preview").innerHTML = "";
   document.getElementById("log").innerHTML = "";
 
-  log("✔ 加载拼豆角色图...");
-  const charImg = await loadImage(charFile);
+  log("✔ 加载角色 A 图像...");
+  const imgA = await loadImage(fileA);
 
-  log("🧠 正在分析角色图特征（提取颜色 & 风格向量）...");
-  const mainColor = getAverageColor(charImg);
+  log("✔ 加载角色 B 图像...");
+  const imgB = await loadImage(fileB);
+
+  log("🧠 正在分析角色 A 的颜色分布，构建 AI 场景风格向量...");
+  const mainColor = getAverageColor(imgA);
   const compColor = getComplementColor(mainColor);
-  log(`🎨 检测到角色主色：rgb(${mainColor.r}, ${mainColor.g}, ${mainColor.b})`);
+  log(`🎨 角色 A 主色：rgb(${mainColor.r}, ${mainColor.g}, ${mainColor.b})`);
+  log("🌌 基于主色 + 互补色生成动态 AI 场景背景...");
 
-  log("🚀 开始生成关键帧（AI 场景 + 角色动作）...");
+  log("🚀 开始生成关键帧（AI 场景 + 双角色互动）...");
+
   const gif = new GIF({
     workers: 2,
-    quality: 12
+    quality: 12,
+    workerScript: 'https://cdnjs.cloudflare.com/ajax/libs/gif.js/0.2.0/gif.worker.js'
   });
 
   const canvas = document.createElement("canvas");
@@ -173,11 +182,13 @@ async function generate() {
   canvas.width = 480;
   canvas.height = 320;
 
-  for (let i = 0; i < 12; i++) {
+  const totalFrames = 12;
+
+  for (let i = 0; i < totalFrames; i++) {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-    // === AI 背景：动态渐变 + 光斑 ===
-    const t = i / 12;
+    // === 1. AI 背景：动态渐变 + 光斑 ===
+    const t = i / (totalFrames - 1);
     const cx = canvas.width / 2 + Math.sin(t * Math.PI * 2) * 80;
     const cy = canvas.height / 2 + Math.cos(t * Math.PI * 2) * 60;
 
@@ -192,13 +203,13 @@ async function generate() {
     ctx.fillStyle = grad;
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-    const dots = 30;
+    const dots = 32;
     for (let j = 0; j < dots; j++) {
       const angle = (j / dots) * Math.PI * 2 + t * 2;
       const radius = 40 + (j * 6);
       const x = canvas.width / 2 + Math.cos(angle) * radius;
       const y = canvas.height / 2 + Math.sin(angle) * radius;
-      const size = 2 + (j % 5);
+      const size = 2 + (j % 4);
 
       ctx.beginPath();
       ctx.fillStyle = (j % 2 === 0)
@@ -208,25 +219,63 @@ async function generate() {
       ctx.fill();
     }
 
-    // === 角色抖动 + 微缩放 ===
-    const offsetX = Math.sin(i * 0.5) * 6;
-    const offsetY = Math.cos(i * 0.5) * 4;
-    const scale   = 1 + Math.sin(i * 0.4) * 0.05;
+    // === 2. 双角色互动轨迹 ===
+    const baseY = canvas.height * 0.6;
 
-    const w = charImg.width * scale * 0.8;
-    const h = charImg.height * scale * 0.8;
+    // 角色 A：从左往中间移动
+    const aProgress = t; // 0 → 1
+    const ax = canvas.width * (0.15 + 0.25 * aProgress);
+    const ay = baseY + Math.sin(t * Math.PI * 2) * 5; // 微小上下抖动
 
-    ctx.globalAlpha = 0.95 + Math.sin(i * 0.3) * 0.05;
+    // 角色 B：从右往中间移动
+    const bProgress = t; // 0 → 1
+    const bx = canvas.width * (0.85 - 0.25 * bProgress);
+    const by = baseY + Math.cos(t * Math.PI * 2) * 5;
+
+    // 轻微缩放，模拟 AI 生成时“呼吸感”
+    const scaleA = 0.65 + Math.sin(t * Math.PI) * 0.05;
+    const scaleB = 0.65 + Math.cos(t * Math.PI) * 0.05;
+
+    const wA = imgA.width * scaleA;
+    const hA = imgA.height * scaleA;
+
+    const wB = imgB.width * scaleB;
+    const hB = imgB.height * scaleB;
+
+    ctx.globalAlpha = 0.96;
+
+    // 角色 A
     ctx.drawImage(
-      charImg,
-      canvas.width / 2 - w / 2 + offsetX,
-      canvas.height / 2 - h / 2 + offsetY,
-      w, h
+      imgA,
+      ax - wA / 2,
+      ay - hA,
+      wA, hA
     );
+
+    // 角色 B
+    ctx.drawImage(
+      imgB,
+      bx - wB / 2,
+      by - hB,
+      wB, hB
+    );
+
     ctx.globalAlpha = 1;
 
+    // （可选）在中间几帧加一条“对话”光带，显得更 AI
+    if (i > 3 && i < 9) {
+      ctx.beginPath();
+      const midY = baseY - 40;
+      const opacity = 0.35 + Math.sin(t * Math.PI) * 0.15;
+      ctx.strokeStyle = rgbStr(compColor, opacity);
+      ctx.lineWidth = 3;
+      ctx.moveTo(ax + wA * 0.2, midY);
+      ctx.lineTo(bx - wB * 0.2, midY);
+      ctx.stroke();
+    }
+
     gif.addFrame(canvas, { delay: 100 });
-    log(`✔ 生成关键帧 ${i + 1}/12`);
+    log(`✔ 生成关键帧 ${i + 1}/${totalFrames}`);
   }
 
   log("🧪 AI 补帧与一致性优化中（模拟中间帧插值）...");
