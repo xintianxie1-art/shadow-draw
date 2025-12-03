@@ -70,7 +70,7 @@ small {
 <div class="container">
   <h1>AI 视频生成（双角色 · 导出视频版）</h1>
   <p>
-    上传两个拼豆角色 → 提取角色 A 的颜色生成 AI 场景 → 
+    上传两个拼豆角色 → 提取角色 A 的颜色生成 AI 场景 →
     让两人在场景中相遇 / 对话 → <b>录制 5 秒动画并导出真正的视频文件（webm）</b>。
   </p>
 
@@ -179,11 +179,8 @@ async function generate() {
   const ctx = canvas.getContext("2d");
   document.getElementById("preview").appendChild(canvas);
 
-  // ====== 模拟“调用 AI 视频生成接口” ======
-  log("🌐 调用 AI 视频生成接口（模拟中：基于角色图 + 场景向量生成关键帧）...");
-  // 这里原本可以 fetch 真正的后端接口，
-  // 现在我们用前端算法 + MediaRecorder 实现本地生成。
-  // =====================================
+  // 模拟“调用 AI 接口”
+  log("🌐 调用 AI 视频生成接口（模拟：基于角色图 + 场景向量生成关键帧）...");
 
   // 使用 MediaRecorder 录制 canvas 动画
   const stream = canvas.captureStream(30); // 30fps
@@ -195,7 +192,6 @@ async function generate() {
       mimeType: 'video/webm;codecs=vp9'
     });
   } catch (e) {
-    // 某些浏览器可能不支持 vp9，就退回到默认
     recorder = new MediaRecorder(stream);
   }
 
@@ -264,30 +260,36 @@ async function generate() {
       ctx.fill();
     }
 
-    // === 2. 双角色互动轨迹 ===
-    const baseY = canvas.height * 0.72;
+    // === 2. 双角色互动轨迹（自动适配高度，防止只画半截） ===
+    const baseY = canvas.height * 0.82; // “地面”稍微靠下
 
-    // 角色 A：从左侧向中间移动
-    const aProgress = Math.min(1, t * 1.2); // 稍微快一点
-    const ax = canvas.width * (0.12 + 0.25 * aProgress);
-    const ay = baseY + Math.sin(t * Math.PI * 2) * 5;
+    // 限制最大高度：人物最高不超过画布的一半
+    const maxH = canvas.height * 0.5;
+    const baseScaleA = Math.min(maxH / imgA.height, 0.9);
+    const baseScaleB = Math.min(maxH / imgB.height, 0.9);
 
-    // 角色 B：从右侧向中间移动
-    const bProgress = Math.min(1, (t - 0.1) * 1.2 + 0.1);
-    const bx = canvas.width * (0.88 - 0.25 * Math.max(0, bProgress));
-    const by = baseY + Math.cos(t * Math.PI * 2) * 5;
-
-    const scaleA = 0.6 + Math.sin(t * Math.PI) * 0.05;
-    const scaleB = 0.6 + Math.cos(t * Math.PI) * 0.05;
+    // 在安全高度基础上加一点“呼吸感”
+    const scaleA = baseScaleA * (0.95 + 0.05 * Math.sin(t * Math.PI));
+    const scaleB = baseScaleB * (0.95 + 0.05 * Math.cos(t * Math.PI));
 
     const wA = imgA.width * scaleA;
     const hA = imgA.height * scaleA;
     const wB = imgB.width * scaleB;
     const hB = imgB.height * scaleB;
 
+    // 角色 A：从左向中间移动
+    const aProgress = Math.min(1, t * 1.2);
+    const ax = canvas.width * (0.12 + 0.25 * aProgress);
+    const ay = baseY + Math.sin(t * Math.PI * 2) * 5;
+
+    // 角色 B：从右向中间移动
+    const bProgress = Math.min(1, (t - 0.1) * 1.2 + 0.1);
+    const bx = canvas.width * (0.88 - 0.25 * Math.max(0, bProgress));
+    const by = baseY + Math.cos(t * Math.PI * 2) * 5;
+
     ctx.globalAlpha = 0.97;
 
-    // 角色 A
+    // 角色 A（以脚踩在 baseY 附近为准）
     ctx.drawImage(
       imgA,
       ax - wA / 2,
