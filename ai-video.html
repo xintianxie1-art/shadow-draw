@@ -2,7 +2,7 @@
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8" />
-<title>数字皮影人 · AI 视频生成系统（躯干去臂 + 关节手臂版）</title>
+<title>数字皮影人 · AI 视频生成系统</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <style>
 body {
@@ -68,17 +68,17 @@ small {
 <body>
 
 <div class="container">
-  <h1>AI 视频生成（皮影躯干 + 肩关节手臂版）</h1>
+  <h1>AI 视频生成</h1>
   <p>
     上传两个拼豆角色 → 自动抠掉白色背景 → 根据角色 A 配色生成 AI 场景 →<br>
     角色中间只画<b>躯干</b>，左右手臂从原图里单独切出，用“肩关节”旋转 → 导出 5 秒 AI 视频（webm）。
   </p>
 
-  <label>① 上传角色 A（例如孙悟空）</label><br>
+  <label>① 上传角色 A </label><br>
   <input id="charImgA" type="file" accept="image/*">
   <small>系统会根据角色 A 的颜色生成 AI 场景背景，并抠掉白底。</small>
 
-  <label>② 上传角色 B（例如唐僧 / 猪八戒 / 沙僧）</label><br>
+  <label>② 上传角色 B </label><br>
   <input id="charImgB" type="file" accept="image/*">
   <small>角色 B 会从另一侧进入，与角色 A 产生互动。</small>
 
