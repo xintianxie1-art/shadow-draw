@@ -2,7 +2,7 @@
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8" />
-<title>数字皮影人 · AI 视频生成系统（导出视频版）</title>
+<title>数字皮影人 · AI 视频生成系统（抠图 + 部分动作版）</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <style>
 body {
@@ -28,7 +28,7 @@ input { margin: 8px 0 18px; }
   padding: 10px;
   border-radius: 8px;
   margin-top: 10px;
-  height: 140px;
+  height: 160px;
   overflow-y: auto;
   font-family: monospace;
   font-size: 12px;
@@ -68,15 +68,15 @@ small {
 <body>
 
 <div class="container">
-  <h1>AI 视频生成（双角色 · 导出视频版）</h1>
+  <h1>AI 视频生成（抠图 + 部分动作版）</h1>
   <p>
-    上传两个拼豆角色 → 提取角色 A 的颜色生成 AI 场景 →
-    让两人在场景中相遇 / 对话 → <b>录制 5 秒动画并导出真正的视频文件（webm）</b>。
+    上传两个拼豆角色 → 自动抠掉白色背景 → 根据角色 A 配色生成 AI 场景 →
+    把角色切分为「头 / 身体 / 腿」三段分别运动 → <b>录制 5 秒 AI 视频（webm）</b>。
   </p>
 
   <label>① 上传角色 A（例如孙悟空）</label><br>
   <input id="charImgA" type="file" accept="image/*">
-  <small>系统会根据角色 A 的颜色生成 AI 场景背景。</small>
+  <small>系统会根据角色 A 的颜色生成 AI 场景背景，同时抠掉白底。</small>
 
   <label>② 上传角色 B（例如唐僧 / 猪八戒 / 沙僧）</label><br>
   <input id="charImgB" type="file" accept="image/*">
@@ -105,21 +105,48 @@ async function loadImage(file) {
   });
 }
 
-// 提取主色
-function getAverageColor(img) {
+// 把白色背景抠成透明：接近白色（RGB > 240）的像素直接 alpha=0
+function createSpriteWithoutWhite(img) {
   const canvas = document.createElement("canvas");
   const ctx = canvas.getContext("2d");
-  const size = 64;
-  canvas.width = size;
-  canvas.height = size;
+  canvas.width = img.width;
+  canvas.height = img.height;
 
-  ctx.drawImage(img, 0, 0, size, size);
-  const data = ctx.getImageData(0, 0, size, size).data;
+  ctx.drawImage(img, 0, 0);
+
+  const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+  const data = imageData.data;
+
+  for (let i = 0; i < data.length; i += 4) {
+    const r = data[i];
+    const g = data[i + 1];
+    const b = data[i + 2];
+    // 如果接近白色，就透明
+    if (r > 240 && g > 240 && b > 240) {
+      data[i + 3] = 0;
+    }
+  }
+
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.putImageData(imageData, 0, 0);
+
+  return canvas;
+}
+
+// 提取主色（基于已经抠过图的 sprite，避免白底干扰）
+function getAverageColorFromSprite(sprite) {
+  const canvas = document.createElement("canvas");
+  const ctx = canvas.getContext("2d");
+  canvas.width = sprite.width;
+  canvas.height = sprite.height;
+  ctx.drawImage(sprite, 0, 0);
+
+  const data = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
 
   let r = 0, g = 0, b = 0, count = 0;
   for (let i = 0; i < data.length; i += 4) {
     const alpha = data[i + 3];
-    if (alpha < 40) continue;
+    if (alpha < 10) continue;
     r += data[i];
     g += data[i + 1];
     b += data[i + 2];
@@ -142,6 +169,49 @@ function rgbStr({ r, g, b }, alpha = 1) {
   return `rgba(${r}, ${g}, ${b}, ${alpha})`;
 }
 
+// 画一个“分段木偶”：把角色按高度切成三段（头 / 身 / 腿），每段微微错位运动
+function drawPuppet(ctx, sprite, centerX, baseY, scale, t, phase) {
+  const sw = sprite.width;
+  const sh = sprite.height;
+  const segH = sh / 3; // 三段
+  const segHScaled = segH * scale;
+  const fullW = sw * scale;
+
+  // 让整个角色稍微左右摆动一点
+  const swayX = Math.sin(t * 2 * Math.PI + phase) * 4;
+
+  // 三段：0=头,1=身体,2=腿，从上到下
+  for (let i = 0; i < 3; i++) {
+    const sy = i * segH;
+    const dx = centerX + swayX;
+    // 段的底部对齐到 baseY 往上
+    const segmentBottom = baseY - (2 - i) * segHScaled;
+    const segmentTop    = segmentBottom - segHScaled;
+
+    // 每一段单独上下微调，让看起来像关节在动
+    let offsetY = 0;
+    if (i === 0) {
+      // 头：上下点头
+      offsetY = Math.sin(t * 4 * Math.PI + phase) * 3;
+    } else if (i === 1) {
+      // 身体：稍微左右 + 上下
+      offsetY = Math.sin(t * 3 * Math.PI + phase) * 2;
+    } else {
+      // 腿：走路感
+      offsetY = Math.sin(t * 6 * Math.PI + phase) * 4;
+    }
+
+    ctx.drawImage(
+      sprite,
+      0, sy,             // 源图起点（切一段）
+      sw, segH,          // 源图宽高
+      dx - fullW / 2,    // 目标 X（居中）
+      segmentTop + offsetY, // 目标 Y（段顶部）
+      fullW, segHScaled  // 目标宽高
+    );
+  }
+}
+
 let animId = null;
 
 async function generate() {
@@ -162,13 +232,17 @@ async function generate() {
   document.getElementById("log").innerHTML = "";
 
   log("✔ 加载角色 A 图像...");
-  const imgA = await loadImage(fileA);
+  const rawA = await loadImage(fileA);
 
   log("✔ 加载角色 B 图像...");
-  const imgB = await loadImage(fileB);
+  const rawB = await loadImage(fileB);
 
-  log("🧠 分析角色 A 配色，构建 AI 场景风格向量...");
-  const mainColor = getAverageColor(imgA);
+  log("✂ 正在自动抠图（去除白色背景）...");
+  const spriteA = createSpriteWithoutWhite(rawA);
+  const spriteB = createSpriteWithoutWhite(rawB);
+
+  log("🧠 基于抠图结果分析角色 A 配色，构建 AI 场景风格向量...");
+  const mainColor = getAverageColorFromSprite(spriteA);
   const compColor = getComplementColor(mainColor);
   log(`🎨 角色 A 主色：rgb(${mainColor.r}, ${mainColor.g}, ${mainColor.b})`);
 
@@ -179,7 +253,6 @@ async function generate() {
   const ctx = canvas.getContext("2d");
   document.getElementById("preview").appendChild(canvas);
 
-  // 模拟“调用 AI 接口”
   log("🌐 调用 AI 视频生成接口（模拟：基于角色图 + 场景向量生成关键帧）...");
 
   // 使用 MediaRecorder 录制 canvas 动画
@@ -229,93 +302,82 @@ async function generate() {
 
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-    // === 1. AI 场景背景（动态渐变 + 光斑） ===
-    const cx = canvas.width / 2 + Math.sin(t * Math.PI * 2) * 80;
-    const cy = canvas.height / 2 + Math.cos(t * Math.PI * 2) * 60;
+    // === 1. AI 场景背景 ===
+    const cx = canvas.width / 2;
+    const cy = canvas.height / 2;
 
     const grad = ctx.createRadialGradient(
       cx, cy, 40,
-      canvas.width / 2, canvas.height / 2, 380
+      cx, cy, 260
     );
-    grad.addColorStop(0, rgbStr(mainColor, 0.95));
-    grad.addColorStop(0.5, rgbStr(compColor, 0.85));
-    grad.addColorStop(1, "rgba(10, 10, 10, 0.9)");
+    grad.addColorStop(0, rgbStr(compColor, 0.95));
+    grad.addColorStop(0.45, rgbStr(mainColor, 0.85));
+    grad.addColorStop(1, "rgba(5, 5, 15, 0.95)");
 
     ctx.fillStyle = grad;
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
+    // 星点噪声
     const dots = 32;
     for (let j = 0; j < dots; j++) {
       const angle = (j / dots) * Math.PI * 2 + t * 2;
-      const radius = 40 + (j * 6);
+      const radius = 30 + (j * 6);
       const x = canvas.width / 2 + Math.cos(angle) * radius;
       const y = canvas.height / 2 + Math.sin(angle) * radius;
       const size = 2 + (j % 4);
 
       ctx.beginPath();
       ctx.fillStyle = (j % 2 === 0)
-        ? rgbStr(mainColor, 0.15 + (j % 3) * 0.05)
-        : rgbStr(compColor, 0.15 + (j % 3) * 0.05);
+        ? rgbStr(mainColor, 0.18 + (j % 3) * 0.05)
+        : rgbStr(compColor, 0.18 + (j % 3) * 0.05);
       ctx.arc(x, y, size, 0, Math.PI * 2);
       ctx.fill();
     }
 
-    // === 2. 双角色互动轨迹（自动适配高度，防止只画半截） ===
-    const baseY = canvas.height * 0.82; // “地面”稍微靠下
+    // === 2. 双角色互动轨迹（使用抠好图的 sprite + 分段木偶） ===
+    const baseY = canvas.height * 0.82; // 地面
 
-    // 限制最大高度：人物最高不超过画布的一半
-    const maxH = canvas.height * 0.5;
-    const baseScaleA = Math.min(maxH / imgA.height, 0.9);
-    const baseScaleB = Math.min(maxH / imgB.height, 0.9);
+    // 限制最大高度：人物最高不超过画布 60%
+    const maxH = canvas.height * 0.6;
+    const baseScaleA = Math.min(maxH / spriteA.height, 1.1);
+    const baseScaleB = Math.min(maxH / spriteB.height, 1.1);
 
-    // 在安全高度基础上加一点“呼吸感”
-    const scaleA = baseScaleA * (0.95 + 0.05 * Math.sin(t * Math.PI));
-    const scaleB = baseScaleB * (0.95 + 0.05 * Math.cos(t * Math.PI));
+    const scaleA = baseScaleA * (0.96 + 0.04 * Math.sin(t * Math.PI));
+    const scaleB = baseScaleB * (0.96 + 0.04 * Math.cos(t * Math.PI));
 
-    const wA = imgA.width * scaleA;
-    const hA = imgA.height * scaleA;
-    const wB = imgB.width * scaleB;
-    const hB = imgB.height * scaleB;
-
-    // 角色 A：从左向中间移动
+    // A 从左向中间
     const aProgress = Math.min(1, t * 1.2);
-    const ax = canvas.width * (0.12 + 0.25 * aProgress);
-    const ay = baseY + Math.sin(t * Math.PI * 2) * 5;
+    const ax = canvas.width * (0.18 + 0.22 * aProgress);
 
-    // 角色 B：从右向中间移动
+    // B 从右向中间
     const bProgress = Math.min(1, (t - 0.1) * 1.2 + 0.1);
-    const bx = canvas.width * (0.88 - 0.25 * Math.max(0, bProgress));
-    const by = baseY + Math.cos(t * Math.PI * 2) * 5;
+    const bx = canvas.width * (0.82 - 0.22 * Math.max(0, bProgress));
 
-    ctx.globalAlpha = 0.97;
+    // 脚下阴影
+    ctx.save();
+    ctx.globalAlpha = 0.35;
+    ctx.fillStyle = "black";
+    ctx.beginPath();
+    ctx.ellipse(ax, baseY + 4, spriteA.width * scaleA * 0.45, 10, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.ellipse(bx, baseY + 4, spriteB.width * scaleB * 0.45, 10, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
 
-    // 角色 A（以脚踩在 baseY 附近为准）
-    ctx.drawImage(
-      imgA,
-      ax - wA / 2,
-      ay - hA,
-      wA, hA
-    );
+    // 画分段木偶角色（自动“识别”头/身/腿 → 各自动起来）
+    drawPuppet(ctx, spriteA, ax, baseY, scaleA, t, 0.0);
+    drawPuppet(ctx, spriteB, bx, baseY, scaleB, t, Math.PI / 3);
 
-    // 角色 B
-    ctx.drawImage(
-      imgB,
-      bx - wB / 2,
-      by - hB,
-      wB, hB
-    );
-
-    ctx.globalAlpha = 1;
-
-    // 中间时刻加一条“对话光带”
+    // 对话光带
     if (t > 0.3 && t < 0.8) {
       ctx.beginPath();
       const midY = baseY - 40;
-      const opacity = 0.35 + Math.sin(t * Math.PI) * 0.2;
+      const opacity = 0.45 + Math.sin(t * Math.PI) * 0.2;
       ctx.strokeStyle = rgbStr(compColor, opacity);
       ctx.lineWidth = 3;
-      ctx.moveTo(ax + wA * 0.2, midY);
-      ctx.lineTo(bx - wB * 0.2, midY);
+      ctx.moveTo(ax + spriteA.width * scaleA * 0.2, midY);
+      ctx.lineTo(bx - spriteB.width * scaleB * 0.2, midY);
       ctx.stroke();
     }
 
