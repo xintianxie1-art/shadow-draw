@@ -2,7 +2,7 @@
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8" />
-<title>数字皮影人 · AI 视频生成系统（整块身体 + 关节手臂版）</title>
+<title>数字皮影人 · AI 视频生成系统（躯干去臂 + 关节手臂版）</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <style>
 body {
@@ -68,10 +68,10 @@ small {
 <body>
 
 <div class="container">
-  <h1>AI 视频生成（整块身体 + 肩关节手臂版）</h1>
+  <h1>AI 视频生成（皮影躯干 + 肩关节手臂版）</h1>
   <p>
-    上传两个拼豆角色 → 自动抠掉白色背景 → 根据角色 A 配色生成 AI 场景 →
-    角色整体保持为<b>一整块</b>，只在肩关节挂接两条可旋转的手臂 → 录制 5 秒 AI 视频（webm）。
+    上传两个拼豆角色 → 自动抠掉白色背景 → 根据角色 A 配色生成 AI 场景 →<br>
+    角色中间只画<b>躯干</b>，左右手臂从原图里单独切出，用“肩关节”旋转 → 导出 5 秒 AI 视频（webm）。
   </p>
 
   <label>① 上传角色 A（例如孙悟空）</label><br>
@@ -132,7 +132,7 @@ function createSpriteWithoutWhite(img) {
   return canvas;
 }
 
-// 从抠好图的 sprite 提主色
+// 从 sprite 提主色
 function getAverageColorFromSprite(sprite) {
   const canvas = document.createElement("canvas");
   const ctx = canvas.getContext("2d");
@@ -167,70 +167,79 @@ function rgbStr({ r, g, b }, alpha = 1) {
 }
 
 /**
- * 整块身体 + 肩关节手臂
- * - 先整体画一整块 sprite（不切断）；
- * - 再在两侧单独叠加一块“整臂”，围绕肩关节旋转。
+ * 皮影版：中间躯干 + 左右手臂
+ *
+ * 横向切三块：
+ * - 左条：左臂
+ * - 中间：躯干（不含手臂）
+ * - 右条：右臂
  */
-function drawPuppetWholeWithArms(ctx, sprite, centerX, baseY, scale, t, phase) {
+function drawPuppetTorsoWithArms(ctx, sprite, centerX, baseY, scale, t, phase) {
   const sw = sprite.width;
   const sh = sprite.height;
-  const fullW = sw * scale;
   const fullH = sh * scale;
+
+  // —— 横向分块 —— //
+  const armRatio = 0.28;                 // 左右各 28% 为手臂区域
+  const armSrcWidth = sw * armRatio;
+  const bodySrcX = armSrcWidth;
+  const bodySrcW = sw - armSrcWidth * 2; // 中间为躯干（不含手臂）
+
+  const fullBodyW = bodySrcW * scale;
 
   // 身体轻微上下 & 左右晃动
   const swayX = Math.sin(t * 2 * Math.PI + phase) * 4;
   const bobY  = Math.sin(t * 2 * Math.PI + phase) * 3;
 
   const x = centerX + swayX;
-  const feetY = baseY;           // 脚落在 baseY
-  const topY  = feetY - fullH;   // 头顶位置
+  const feetY = baseY;
+  const topY  = feetY - fullH;
 
   // 阴影
   ctx.save();
   ctx.globalAlpha = 0.35;
   ctx.fillStyle = "black";
   ctx.beginPath();
-  ctx.ellipse(x, feetY + 4, fullW * 0.45, 10, 0, 0, Math.PI * 2);
+  ctx.ellipse(x, feetY + 4, fullBodyW * 0.7, 10, 0, 0, Math.PI * 2);
   ctx.fill();
   ctx.restore();
 
-  // 1⃣ 先画整块身体（带头 + 身 + 腿），保证不会断
+  // 1⃣ 画躯干（中间块，不含手臂）
   ctx.drawImage(
     sprite,
-    0, 0,
-    sw, sh,
-    x - fullW / 2,
+    bodySrcX, 0,            // 源图起点
+    bodySrcW, sh,           // 源图大小
+    x - fullBodyW / 2,      // 目标位置
     topY + bobY,
-    fullW, fullH
+    fullBodyW, fullH
   );
 
-  // 2⃣ 在身体上叠加两条“整臂”围绕肩关节旋转
-  const bodyTop     = topY + fullH * 0.25 + bobY; // 大致胸口范围
+  // 2⃣ 再画两条手臂（整条条纹纹理），绕“肩”转
+  const bodyTop     = topY + fullH * 0.25 + bobY;
   const bodyBottom  = topY + fullH * 0.65 + bobY;
   const shoulderY   = (bodyTop + bodyBottom) / 2;
 
-  const armSrcHeight = sh * 0.45;                  // 从中间抽出一条“胳膊”
-  const armSrcY      = sh * 0.25;                  // 起始略偏上
-  const armSrcWidth  = sw * 0.3;                   // 左右各 30% 为臂区
+  const armSrcHeight = sh * 0.5;            // 手臂采样高度
+  const armSrcY      = sh * 0.25;
   const armDestH     = armSrcHeight * scale;
-  const armDestW     = armSrcWidth * scale;
+  const armDestW     = armSrcWidth  * scale;
 
-  const armAngle = Math.sin(t * 4 * Math.PI + phase) * 0.45; // 大约 ±25°
+  const armAngle = Math.sin(t * 4 * Math.PI + phase) * 0.45; // 摆动角
 
-  // 左肩关节位置
-  const shoulderOffsetX = fullW * 0.35; // 肩相对身体中心的水平偏移
+  // 肩相对躯干中心的偏移（用躯干宽算）
+  const shoulderOffsetX = fullBodyW * 0.55;
   const leftShoulderX   = x - shoulderOffsetX;
   const rightShoulderX  = x + shoulderOffsetX;
 
   // 左臂
   ctx.save();
   ctx.translate(leftShoulderX, shoulderY);
-  ctx.rotate(armAngle); // 左臂顺向
+  ctx.rotate(armAngle);
   ctx.drawImage(
     sprite,
-    0, armSrcY,                       // 源图左侧条
+    0, armSrcY,                   // 源图左臂区域
     armSrcWidth, armSrcHeight,
-    -armDestW / 2, 0,                 // 以肩为原点向下画
+    -armDestW / 2, 0,             // 以肩为原点向下画
     armDestW, armDestH
   );
   ctx.restore();
@@ -238,10 +247,10 @@ function drawPuppetWholeWithArms(ctx, sprite, centerX, baseY, scale, t, phase) {
   // 右臂
   ctx.save();
   ctx.translate(rightShoulderX, shoulderY);
-  ctx.rotate(-armAngle); // 右臂反向
+  ctx.rotate(-armAngle);
   ctx.drawImage(
     sprite,
-    sw - armSrcWidth, armSrcY,        // 源图右侧条
+    sw - armSrcWidth, armSrcY,    // 源图右臂区域
     armSrcWidth, armSrcHeight,
     -armDestW / 2, 0,
     armDestW, armDestH
@@ -385,9 +394,9 @@ async function generate() {
     const ax = canvas.width * (0.18 + 0.22 * aProgress);
     const bx = canvas.width * (0.82 - 0.22 * Math.max(0, bProgress));
 
-    // 3⃣ 把两个人画出来（整块 + 手臂）
-    drawPuppetWholeWithArms(ctx, spriteA, ax, baseY, scaleA, t, 0.0);
-    drawPuppetWholeWithArms(ctx, spriteB, bx, baseY, scaleB, t, Math.PI / 3);
+    // 3⃣ 躯干 + 手臂
+    drawPuppetTorsoWithArms(ctx, spriteA, ax, baseY, scaleA, t, 0.0);
+    drawPuppetTorsoWithArms(ctx, spriteB, bx, baseY, scaleB, t, Math.PI / 3);
 
     // 4⃣ 中间“对话光带”
     if (t > 0.3 && t < 0.8) {
@@ -396,8 +405,8 @@ async function generate() {
       const opacity = 0.45 + Math.sin(t * Math.PI) * 0.2;
       ctx.strokeStyle = rgbStr(compColor, opacity);
       ctx.lineWidth = 3;
-      ctx.moveTo(ax + spriteA.width * scaleA * 0.2, midY);
-      ctx.lineTo(bx - spriteB.width * scaleB * 0.2, midY);
+      ctx.moveTo(ax, midY);
+      ctx.lineTo(bx, midY);
       ctx.stroke();
     }
 
