@@ -2,7 +2,7 @@
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8" />
-<title>数字皮影人 · AI 视频生成系统</title>
+<title>数字皮影人 · 皮影骨骼 AI 视频（A 关节 + B 整体）</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <style>
 body {
@@ -28,7 +28,7 @@ input { margin: 8px 0 18px; }
   padding: 10px;
   border-radius: 8px;
   margin-top: 10px;
-  height: 160px;
+  height: 170px;
   overflow-y: auto;
   font-family: monospace;
   font-size: 12px;
@@ -68,21 +68,29 @@ small {
 <body>
 
 <div class="container">
-  <h1>AI 视频生成</h1>
+  <h1>AI 皮影视频生成（A 关节手臂 + B 整体移动）</h1>
   <p>
-    上传两个拼豆角色 → 自动抠掉白色背景 → 根据角色 A 配色生成 AI 场景 →<br>
-    角色中间只画<b>躯干</b>，左右手臂从原图里单独切出，用“肩关节”旋转 → 导出 5 秒 AI 视频（webm）。
+    为了保证“皮影关节”不乱切，这里采用：<br>
+    <b>A 角色 = 身体 + 左臂 + 右臂 三张透明 PNG，由你提前切好；<br>
+    B 角色 = 一整张透明 PNG。</b><br>
+    浏览器根据 A 的配色实时生成场景，并控制 A 的肩关节挥手，B 从右侧进入互动，最后录制 5 秒视频（webm）。
   </p>
 
-  <label>① 上传角色 A </label><br>
-  <input id="charImgA" type="file" accept="image/*">
-  <small>系统会根据角色 A 的颜色生成 AI 场景背景，并抠掉白底。</small>
+  <label>① 角色 A 身体（body，仅身体和腿，尽量不要带手臂）</label><br>
+  <input id="bodyAFile" type="file" accept="image/*">
+  <small>建议在 PS 里把 A 的手臂抠掉，单独导出左右手臂。</small>
 
-  <label>② 上传角色 B </label><br>
-  <input id="charImgB" type="file" accept="image/*">
-  <small>角色 B 会从另一侧进入，与角色 A 产生互动。</small>
+  <label>② 角色 A 左臂（armLeft）</label><br>
+  <input id="armLeftAFile" type="file" accept="image/*">
 
-  <button id="genBtn" onclick="generate()">生成 AI 视频（约 5 秒）</button>
+  <label>③ 角色 A 右臂（armRight）</label><br>
+  <input id="armRightAFile" type="file" accept="image/*">
+
+  <label>④ 角色 B 整体（例如唐僧 / 猪八戒 / 沙僧）</label><br>
+  <input id="charBFile" type="file" accept="image/*">
+  <small>B 不做骨骼，只整体走动 + 抖动。</small>
+
+  <button onclick="generate()">生成 AI 皮影视频（约 5 秒）</button>
 
   <div id="log"></div>
   <div id="preview"></div>
@@ -105,42 +113,16 @@ async function loadImage(file) {
   });
 }
 
-// 抠掉接近白色的背景
-function createSpriteWithoutWhite(img) {
+// 提取主色（简单平均）
+function getAverageColor(img) {
   const canvas = document.createElement("canvas");
   const ctx = canvas.getContext("2d");
-  canvas.width = img.width;
-  canvas.height = img.height;
+  const size = 64;
+  canvas.width = size;
+  canvas.height = size;
 
-  ctx.drawImage(img, 0, 0);
-
-  const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-  const data = imageData.data;
-
-  for (let i = 0; i < data.length; i += 4) {
-    const r = data[i];
-    const g = data[i + 1];
-    const b = data[i + 2];
-    if (r > 240 && g > 240 && b > 240) {
-      data[i + 3] = 0; // 透明
-    }
-  }
-
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
-  ctx.putImageData(imageData, 0, 0);
-
-  return canvas;
-}
-
-// 从 sprite 提主色
-function getAverageColorFromSprite(sprite) {
-  const canvas = document.createElement("canvas");
-  const ctx = canvas.getContext("2d");
-  canvas.width = sprite.width;
-  canvas.height = sprite.height;
-  ctx.drawImage(sprite, 0, 0);
-
-  const data = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
+  ctx.drawImage(img, 0, 0, size, size);
+  const data = ctx.getImageData(0, 0, size, size).data;
 
   let r = 0, g = 0, b = 0, count = 0;
   for (let i = 0; i < data.length; i += 4) {
@@ -167,105 +149,129 @@ function rgbStr({ r, g, b }, alpha = 1) {
 }
 
 /**
- * 皮影版：中间躯干 + 左右手臂
- *
- * 横向切三块：
- * - 左条：左臂
- * - 中间：躯干（不含手臂）
- * - 右条：右臂
+ * 绘制 A：身体 + 左右手臂（关节在肩部附近）
+ * 所有图片都已经是你手工切好的透明 PNG，不再自动裁切。
  */
-function drawPuppetTorsoWithArms(ctx, sprite, centerX, baseY, scale, t, phase) {
-  const sw = sprite.width;
-  const sh = sprite.height;
-  const fullH = sh * scale;
+function drawCharacterA(ctx, bodyImg, armLeftImg, armRightImg, cx, baseY, t, phase) {
+  const bodyScale = 0.7;
+  const bw = bodyImg.width * bodyScale;
+  const bh = bodyImg.height * bodyScale;
 
-  // —— 横向分块 —— //
-  const armRatio = 0.28;                 // 左右各 28% 为手臂区域
-  const armSrcWidth = sw * armRatio;
-  const bodySrcX = armSrcWidth;
-  const bodySrcW = sw - armSrcWidth * 2; // 中间为躯干（不含手臂）
-
-  const fullBodyW = bodySrcW * scale;
-
-  // 身体轻微上下 & 左右晃动
   const swayX = Math.sin(t * 2 * Math.PI + phase) * 4;
   const bobY  = Math.sin(t * 2 * Math.PI + phase) * 3;
 
-  const x = centerX + swayX;
+  const x = cx + swayX;
   const feetY = baseY;
-  const topY  = feetY - fullH;
+  const topY  = feetY - bh;
 
   // 阴影
   ctx.save();
   ctx.globalAlpha = 0.35;
   ctx.fillStyle = "black";
   ctx.beginPath();
-  ctx.ellipse(x, feetY + 4, fullBodyW * 0.7, 10, 0, 0, Math.PI * 2);
+  ctx.ellipse(x, feetY + 4, bw * 0.4, 9, 0, 0, Math.PI * 2);
   ctx.fill();
   ctx.restore();
 
-  // 1⃣ 画躯干（中间块，不含手臂）
+  // 1⃣ 身体整块（不含手臂，是你切好的）
   ctx.drawImage(
-    sprite,
-    bodySrcX, 0,            // 源图起点
-    bodySrcW, sh,           // 源图大小
-    x - fullBodyW / 2,      // 目标位置
+    bodyImg,
+    0, 0,
+    bodyImg.width, bodyImg.height,
+    x - bw / 2,
     topY + bobY,
-    fullBodyW, fullH
+    bw, bh
   );
 
-  // 2⃣ 再画两条手臂（整条条纹纹理），绕“肩”转
-  const bodyTop     = topY + fullH * 0.25 + bobY;
-  const bodyBottom  = topY + fullH * 0.65 + bobY;
-  const shoulderY   = (bodyTop + bodyBottom) / 2;
+  // 2⃣ 手臂：根据你导出的臂图，再绕肩转动
+  const armScale = bodyScale; // 简单设为一样的缩放
+  const awL = armLeftImg.width  * armScale;
+  const ahL = armLeftImg.height * armScale;
+  const awR = armRightImg.width  * armScale;
+  const ahR = armRightImg.height * armScale;
 
-  const armSrcHeight = sh * 0.5;            // 手臂采样高度
-  const armSrcY      = sh * 0.25;
-  const armDestH     = armSrcHeight * scale;
-  const armDestW     = armSrcWidth  * scale;
+  // 肩位置：大约在身体高度的 35%，左右稍微往外
+  const shoulderCenterY = topY + bobY + bh * 0.35;
+  const shoulderOffsetX = bw * 0.32; // 左右肩离身体中心的水平距离
 
-  const armAngle = Math.sin(t * 4 * Math.PI + phase) * 0.45; // 摆动角
+  const leftShoulderX  = x - shoulderOffsetX;
+  const rightShoulderX = x + shoulderOffsetX;
 
-  // 肩相对躯干中心的偏移（用躯干宽算）
-  const shoulderOffsetX = fullBodyW * 0.55;
-  const leftShoulderX   = x - shoulderOffsetX;
-  const rightShoulderX  = x + shoulderOffsetX;
+  const armAngle = Math.sin(t * 4 * Math.PI + phase) * 0.5; // ±约30°
 
   // 左臂
   ctx.save();
-  ctx.translate(leftShoulderX, shoulderY);
+  ctx.translate(leftShoulderX, shoulderCenterY);
   ctx.rotate(armAngle);
   ctx.drawImage(
-    sprite,
-    0, armSrcY,                   // 源图左臂区域
-    armSrcWidth, armSrcHeight,
-    -armDestW / 2, 0,             // 以肩为原点向下画
-    armDestW, armDestH
+    armLeftImg,
+    0, 0,
+    armLeftImg.width, armLeftImg.height,
+    -awL * 0.2,       // 调整这个偏移，让肩部纹理恰好覆盖在身体肩的位置
+    0,
+    awL, ahL
   );
   ctx.restore();
 
   // 右臂
   ctx.save();
-  ctx.translate(rightShoulderX, shoulderY);
+  ctx.translate(rightShoulderX, shoulderCenterY);
   ctx.rotate(-armAngle);
   ctx.drawImage(
-    sprite,
-    sw - armSrcWidth, armSrcY,    // 源图右臂区域
-    armSrcWidth, armSrcHeight,
-    -armDestW / 2, 0,
-    armDestW, armDestH
+    armRightImg,
+    0, 0,
+    armRightImg.width, armRightImg.height,
+    -awR * 0.8,    // 这里往左偏一点，让肩端贴住身体
+    0,
+    awR, ahR
   );
   ctx.restore();
+}
+
+/**
+ * 绘制 B：整体一张图，轻微抖动 + 移动
+ */
+function drawCharacterB(ctx, img, cx, baseY, t, phase) {
+  const scale = 0.7;
+  const w = img.width * scale;
+  const h = img.height * scale;
+
+  const swayX = Math.sin(t * 2 * Math.PI + phase) * 3;
+  const bobY  = Math.sin(t * 2 * Math.PI + phase) * 2;
+
+  const x = cx + swayX;
+  const feetY = baseY;
+  const topY  = feetY - h;
+
+  // 阴影
+  ctx.save();
+  ctx.globalAlpha = 0.35;
+  ctx.fillStyle = "black";
+  ctx.beginPath();
+  ctx.ellipse(x, feetY + 4, w * 0.4, 9, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+
+  ctx.drawImage(
+    img,
+    0, 0,
+    img.width, img.height,
+    x - w / 2,
+    topY + bobY,
+    w, h
+  );
 }
 
 let animId = null;
 
 async function generate() {
-  const fileA = document.getElementById("charImgA").files[0];
-  const fileB = document.getElementById("charImgB").files[0];
+  const bodyFileA    = document.getElementById("bodyAFile").files[0];
+  const armLeftFileA = document.getElementById("armLeftAFile").files[0];
+  const armRightFileA= document.getElementById("armRightAFile").files[0];
+  const charBFile    = document.getElementById("charBFile").files[0];
 
-  if (!fileA || !fileB) {
-    log("❌ 需要同时上传角色 A 和角色 B");
+  if (!bodyFileA || !armLeftFileA || !armRightFileA || !charBFile) {
+    log("❌ 请先上传：A 身体 + A 左臂 + A 右臂 + B 角色 四张图");
     return;
   }
 
@@ -277,66 +283,60 @@ async function generate() {
   document.getElementById("preview").innerHTML = "";
   document.getElementById("log").innerHTML = "";
 
-  log("✔ 加载角色 A 图像...");
-  const rawA = await loadImage(fileA);
+  log("✔ 加载角色 A 身体...");
+  const bodyA = await loadImage(bodyFileA);
+  log("✔ 加载角色 A 左臂...");
+  const armLeftA = await loadImage(armLeftFileA);
+  log("✔ 加载角色 A 右臂...");
+  const armRightA = await loadImage(armRightFileA);
+  log("✔ 加载角色 B 整体...");
+  const charB = await loadImage(charBFile);
 
-  log("✔ 加载角色 B 图像...");
-  const rawB = await loadImage(fileB);
-
-  log("✂ 正在自动抠图（去除白色背景）...");
-  const spriteA = createSpriteWithoutWhite(rawA);
-  const spriteB = createSpriteWithoutWhite(rawB);
-
-  log("🧠 基于抠图结果分析角色 A 配色，构建 AI 场景风格向量...");
-  const mainColor = getAverageColorFromSprite(spriteA);
+  log("🧠 提取 A 身体主色，构建 AI 场景风格向量...");
+  const mainColor = getAverageColor(bodyA);
   const compColor = getComplementColor(mainColor);
   log(`🎨 角色 A 主色：rgb(${mainColor.r}, ${mainColor.g}, ${mainColor.b})`);
 
-  // 创建 canvas
+  // Canvas
   const canvas = document.createElement("canvas");
   canvas.width = 480;
   canvas.height = 320;
   const ctx = canvas.getContext("2d");
   document.getElementById("preview").appendChild(canvas);
 
-  log("🌐 调用 AI 视频生成接口（模拟：基于角色图 + 场景向量生成关键帧）...");
+  log("🌐 调用 AI 视频生成接口（模拟：基于骨骼结构 + 场景向量生成关键帧）...");
 
-  // MediaRecorder 录制动画
+  // MediaRecorder
   const stream = canvas.captureStream(30);
   let recorder;
   let chunks = [];
 
   try {
-    recorder = new MediaRecorder(stream, {
-      mimeType: 'video/webm;codecs=vp9'
-    });
+    recorder = new MediaRecorder(stream, { mimeType: "video/webm;codecs=vp9" });
   } catch (e) {
     recorder = new MediaRecorder(stream);
   }
 
   recorder.ondataavailable = e => {
-    if (e.data && e.data.size > 0) {
-      chunks.push(e.data);
-    }
+    if (e.data && e.data.size > 0) chunks.push(e.data);
   };
 
   recorder.onstop = () => {
     log("🎉 AI 视频生成完成（录制结束）！");
-    const blob = new Blob(chunks, { type: 'video/webm' });
+    const blob = new Blob(chunks, { type: "video/webm" });
     const url = URL.createObjectURL(blob);
 
-    const html = `
+    document.getElementById("preview").innerHTML = `
       <h3>AI 生成视频结果：</h3>
       <video controls src="${url}"></video>
       <br><br>
-      <a href="${url}" download="ai-video.webm">点击下载 ai-video.webm</a>
+      <a href="${url}" download="ai-shadow-video.webm">点击下载 ai-shadow-video.webm</a>
     `;
-    document.getElementById("preview").innerHTML = html;
   };
 
   chunks = [];
   recorder.start();
-  log("🎥 开始录制 AI 场景动画（约 5 秒）...");
+  log("🎥 开始录制 AI 皮影动画（约 5 秒）...");
 
   const recordDuration = 5000;
   const startTime = performance.now();
@@ -350,15 +350,10 @@ async function generate() {
     // 1⃣ 背景
     const cx = canvas.width / 2;
     const cy = canvas.height / 2;
-
-    const grad = ctx.createRadialGradient(
-      cx, cy, 40,
-      cx, cy, 260
-    );
+    const grad = ctx.createRadialGradient(cx, cy, 40, cx, cy, 260);
     grad.addColorStop(0, rgbStr(compColor, 0.95));
     grad.addColorStop(0.45, rgbStr(mainColor, 0.85));
     grad.addColorStop(1, "rgba(5, 5, 15, 0.95)");
-
     ctx.fillStyle = grad;
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
@@ -371,35 +366,31 @@ async function generate() {
       const size = 2 + (j % 4);
 
       ctx.beginPath();
-      ctx.fillStyle = (j % 2 === 0)
-        ? rgbStr(mainColor, 0.18 + (j % 3) * 0.05)
-        : rgbStr(compColor, 0.18 + (j % 3) * 0.05);
+      ctx.fillStyle =
+        j % 2 === 0
+          ? rgbStr(mainColor, 0.18 + (j % 3) * 0.05)
+          : rgbStr(compColor, 0.18 + (j % 3) * 0.05);
       ctx.arc(x, y, size, 0, Math.PI * 2);
       ctx.fill();
     }
 
-    // 2⃣ 双角色位置
     const baseY = canvas.height * 0.82;
 
-    const maxH = canvas.height * 0.6;
-    const baseScaleA = Math.min(maxH / spriteA.height, 1.1);
-    const baseScaleB = Math.min(maxH / spriteB.height, 1.1);
+    // A 固定在左侧略偏中
+    const ax = canvas.width * 0.28;
 
-    const scaleA = baseScaleA;
-    const scaleB = baseScaleB;
+    // B 从右向中间移动
+    const bProgress = Math.min(1, t * 1.2);
+    const bx = canvas.width * (0.9 - 0.4 * bProgress);
 
-    const aProgress = Math.min(1, t * 1.2);
-    const bProgress = Math.min(1, (t - 0.1) * 1.2 + 0.1);
+    // 画 A（关节手臂）
+    drawCharacterA(ctx, bodyA, armLeftA, armRightA, ax, baseY, t, 0.0);
 
-    const ax = canvas.width * (0.18 + 0.22 * aProgress);
-    const bx = canvas.width * (0.82 - 0.22 * Math.max(0, bProgress));
+    // 画 B（整体移动）
+    drawCharacterB(ctx, charB, bx, baseY, t, Math.PI / 3);
 
-    // 3⃣ 躯干 + 手臂
-    drawPuppetTorsoWithArms(ctx, spriteA, ax, baseY, scaleA, t, 0.0);
-    drawPuppetTorsoWithArms(ctx, spriteB, bx, baseY, scaleB, t, Math.PI / 3);
-
-    // 4⃣ 中间“对话光带”
-    if (t > 0.3 && t < 0.8) {
+    // 对话光带
+    if (t > 0.3 && t < 0.9) {
       ctx.beginPath();
       const midY = baseY - canvas.height * 0.35;
       const opacity = 0.45 + Math.sin(t * Math.PI) * 0.2;
